@@ -444,4 +444,16 @@ void nbvInspection::nbvPlanner<stateVec>::evasionCallback(
   tree_->evade(segmentMsg);
 }
 
+template<typename stateVec>
+Eigen::Vector3d nbvInspection::nbvPlanner<stateVec>::getMapSize()
+{
+    Eigen::Vector3d mapSize = Eigen::Vector3d::Zero();
+    if (manager_) {
+        mapSize = manager_->getMapSize();
+    } else {
+        ROS_WARN("Octomap manager not initialized");
+    }
+    return mapSize;
+}
+
 #endif // NBVP_HPP_

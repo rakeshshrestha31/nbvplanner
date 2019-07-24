@@ -74,6 +74,14 @@ class nbvPlanner
   void insertPointcloudWithTfCamUp(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void insertPointcloudWithTfCamDown(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void evasionCallback(const multiagent_collision_check::Segment& segmentMsg);
+
+  /**
+   * wrapper over manager_.getMapSize() with some bells and whistles
+   */
+  Eigen::Vector3d getMapSize();
+
+  bool isPlannerReady() { return ready_; }
+  bool isMapperReady() { return manager_; }
 };
 }
 
