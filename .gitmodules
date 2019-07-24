@@ -3,7 +3,7 @@
 	url = https://github.com/ethz-asl/rotors
 [submodule "volumetric_mapping"]
 	path = volumetric_mapping
-	url = https://github.com/ethz-asl/volumetric_mapping
+	url = git@github.com:rakeshshrestha31/volumetric_mapping.git
 [submodule "minkindr_ros"]
 	path = minkindr_ros
 	url = https://github.com/ethz-asl/minkindr_ros
