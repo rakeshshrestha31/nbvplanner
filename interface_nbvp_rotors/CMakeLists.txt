@@ -4,6 +4,7 @@ project(interface_nbvp_rotors)
 find_package(catkin REQUIRED COMPONENTS
   trajectory_msgs
   mav_msgs
+  nbvplanner
   tf
 )
 
