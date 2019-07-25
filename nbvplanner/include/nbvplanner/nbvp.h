@@ -80,8 +80,18 @@ class nbvPlanner
    */
   Eigen::Vector3d getMapSize();
 
+  // state of planner and mapper
   bool isPlannerReady() { return ready_; }
   bool isMapperReady() { return manager_; }
+
+  // get octomap manager
+  const volumetric_mapping::OctomapManager * const getOctomapManagerConst() const {
+    return manager_;
+  }
+
+  volumetric_mapping::OctomapManager * getOctomapManager() const {
+    return manager_;
+  }
 };
 }
 
