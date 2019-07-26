@@ -85,10 +85,17 @@ class nbvPlanner
   bool isMapperReady() { return manager_; }
 
   // get octomap manager
-  const volumetric_mapping::OctomapManager * const getOctomapManagerConst() const {
+  /** immutable data and immutable pointer */
+  const volumetric_mapping::OctomapManager * const getOctomapManagerConstConst() const {
     return manager_;
   }
 
+  /** immutable data */
+  const volumetric_mapping::OctomapManager * getOctomapManagerConst() const {
+    return manager_;
+  }
+
+  /** mutable */
   volumetric_mapping::OctomapManager * getOctomapManager() const {
     return manager_;
   }
