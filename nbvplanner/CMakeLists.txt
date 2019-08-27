@@ -10,6 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   octomap_world
   tf
+  tf2
+  tf2_geometry_msgs
   kdtree
   multiagent_collision_check
 )
@@ -51,6 +53,15 @@ target_link_libraries(nbvPlannerLib
   ${OCTOMAP_LIBRARIES}
 )
 target_link_libraries(nbvPlanner
+  ${catkin_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
+)
+
+### Test executables ###
+add_executable(original_gain_viz tests/original_gain_viz.cpp)
+add_dependencies(original_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS})
+target_link_libraries(original_gain_viz
+  nbvPlannerLib
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
 )
