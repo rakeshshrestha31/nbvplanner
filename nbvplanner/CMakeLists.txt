@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   kdtree
   multiagent_collision_check
+  scene_completion_3d_msgs
 )
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
@@ -70,6 +71,20 @@ add_executable(original_gain_viz
 add_dependencies(original_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(original_gain_viz
+  nbvPlannerLib
+  ${catkin_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
+)
+
+### Test executables ###
+add_executable(predicted_gain_viz
+  tests/predicted_gain_viz.cpp
+  tests/utils.cpp
+)
+
+add_dependencies(predicted_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+target_link_libraries(predicted_gain_viz
   nbvPlannerLib
   ${catkin_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
