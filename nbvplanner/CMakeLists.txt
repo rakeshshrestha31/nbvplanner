@@ -48,7 +48,8 @@ include_directories(
 
 add_library(nbvPlannerLib src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/tree.cpp)
 add_executable(nbvPlanner src/nbv_planner_node.cpp src/mesh_structure.cpp src/nbvp.cpp src/rrt.cpp src/tree.cpp)
-add_dependencies(nbvPlannerLib ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(nbvPlannerLib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(nbvPlanner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(nbvPlannerLib
   ${catkin_LIBRARIES}
@@ -61,7 +62,7 @@ target_link_libraries(nbvPlanner
 
 ### Test executables ###
 add_executable(original_gain_viz tests/original_gain_viz.cpp)
-add_dependencies(original_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(original_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(original_gain_viz
   nbvPlannerLib
   ${catkin_LIBRARIES}
