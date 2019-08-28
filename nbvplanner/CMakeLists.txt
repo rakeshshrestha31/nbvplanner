@@ -34,13 +34,14 @@ generate_messages(
 )
 
 catkin_package(
-  INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${OCTOMAP_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS}
+  INCLUDE_DIRS include tests/include ${Eigen_INCLUDE_DIRS} ${OCTOMAP_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS}
   LIBRARIES nbvPlannerLib ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES}
   CATKIN_DEPENDS message_runtime roscpp geometry_msgs visualization_msgs octomap_world tf kdtree
 )
 
 include_directories(
   include
+  tests/include
   ${catkin_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
@@ -61,8 +62,13 @@ target_link_libraries(nbvPlanner
 )
 
 ### Test executables ###
-add_executable(original_gain_viz tests/original_gain_viz.cpp)
+add_executable(original_gain_viz
+  tests/original_gain_viz.cpp
+  tests/utils.cpp
+)
+
 add_dependencies(original_gain_viz ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 target_link_libraries(original_gain_viz
   nbvPlannerLib
   ${catkin_LIBRARIES}

@@ -3,14 +3,12 @@
  * Author: Rakesh Shrestha, rakeshs@sfu.ca
  */
 
-#include <cstdlib>
 #include <ctime>
 #include <memory>
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 // PCL specific includes
 #include <pcl_ros/point_cloud.h>
@@ -20,59 +18,9 @@
 #include <nbvplanner/nbvp.h>
 #include <nbvplanner/nbvp.hpp>
 
-// typedefs
-typedef Eigen::Vector4d StateVecT;
-typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
+#include <nbvplanner_tests/utils.h>
 
-// free functions
-/** random number from 0 to 1 */
-double unsignedUnitRandom();
-
-/** random number from -1 to 1 */
-double signedUnitRandom();
-
-/** state vector to ROS msg type */
-void stateVecToPose(const StateVecT &state_vec, geometry_msgs::Pose &pose);
-
-/** vector of eigen vectors to ROS point cloud type*/
-void vecVectorToPointCloud(const std::vector<Eigen::Vector3d> &vecVector,
-                           PointCloudT &point_cloud);
-
-double unsignedUnitRandom()
-{
-  return (double)(rand()) / RAND_MAX;
-}
-
-double signedUnitRandom()
-{
-  return (unsignedUnitRandom() - 0.5) * 2;
-}
-
-void stateVecToPose(const StateVecT &state_vec, geometry_msgs::Pose &pose)
-{
-  tf2::Quaternion tf2_quaternion;
-  tf2_quaternion.setRPY(0, 0, state_vec(3));
-  tf2::convert(tf2_quaternion, pose.orientation);
-
-  pose.position.x = state_vec(0);
-  pose.position.y = state_vec(1);
-  pose.position.z = state_vec(2);
-}
-
-void vecVectorToPointCloud(const std::vector<Eigen::Vector3d> &vecVector,
-                           PointCloudT &point_cloud)
-{
-  point_cloud.width = 1;
-  point_cloud.height = 1;
-  point_cloud.points.clear();
-
-  for (const auto &vec: vecVector)
-  {
-    point_cloud.push_back(
-      pcl::PointXYZ(vec(0), vec(1), vec(2))
-    );
-  }
-}
+using namespace nbvplanner_tests;
 
 /**
  * visualizing original (without scene prediction) information gain
