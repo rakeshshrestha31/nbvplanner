@@ -509,7 +509,10 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
   return ret;
 }
 
-double nbvInspection::RrtTree::gain(StateVec state)
+double nbvInspection::RrtTree::gain(
+    StateVec state,
+    std::vector<Eigen::Vector3d> *gain_nodes/*=nullptr*/
+)
 {
 // This function computes the gain
   double gain = 0.0;
@@ -556,29 +559,30 @@ double nbvInspection::RrtTree::gain(StateVec state)
         double probability;
         volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
             vec, &probability);
-        if (node == volumetric_mapping::OctomapManager::CellStatus::kUnknown) {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igUnmapped_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+        std::map<volumetric_mapping::OctomapManager::CellStatus,
+                 decltype(params_.igUnmapped_)> cell_gains = {
+          {
+            volumetric_mapping::OctomapManager::CellStatus::kUnknown,
+            params_.igUnmapped_
+          }, {
+            volumetric_mapping::OctomapManager::CellStatus::kOccupied,
+            params_.igOccupied_
+          }, {
+            volumetric_mapping::OctomapManager::CellStatus::kFree,
+            params_.igFree_
           }
-        } else if (node == volumetric_mapping::OctomapManager::CellStatus::kOccupied) {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igOccupied_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
-          }
-        } else {
-          // Rayshooting to evaluate inspectability of cell
-          if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
-              != this->manager_->getVisibility(origin, vec, false)) {
-            gain += params_.igFree_;
-            // TODO: Add probabilistic gain
-            // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+        };
+
+        // Rayshooting to evaluate inspectability of cell
+        if (cell_gains[node] > 1e-6
+            && volumetric_mapping::OctomapManager::CellStatus::kOccupied
+                  != this->manager_->getVisibility(origin, vec, false)) {
+          gain += cell_gains[node];
+          // TODO: Add probabilistic gain
+          // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+
+          if (gain_nodes) {
+            gain_nodes->push_back(vec);
           }
         }
       }

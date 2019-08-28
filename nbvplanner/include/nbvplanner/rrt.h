@@ -50,7 +50,7 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
-  double gain(StateVec state);
+  double gain(StateVec state, std::vector<Eigen::Vector3d> *gain_nodes=nullptr);
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
  protected:
