@@ -12,10 +12,17 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+// PCL specific includes
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+
 #include <nbvplanner/nbvp.h>
 #include <nbvplanner/nbvp.hpp>
 
+// typedefs
 typedef Eigen::Vector4d StateVecT;
+typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
 
 // free functions
 /** random number from 0 to 1 */
@@ -26,6 +33,10 @@ double signedUnitRandom();
 
 /** state vector to ROS msg type */
 void stateVecToPose(const StateVecT &state_vec, geometry_msgs::Pose &pose);
+
+/** vector of eigen vectors to ROS point cloud type*/
+void vecVectorToPointCloud(const std::vector<Eigen::Vector3d> &vecVector,
+                           PointCloudT &point_cloud);
 
 double unsignedUnitRandom()
 {
@@ -48,6 +59,21 @@ void stateVecToPose(const StateVecT &state_vec, geometry_msgs::Pose &pose)
   pose.position.z = state_vec(2);
 }
 
+void vecVectorToPointCloud(const std::vector<Eigen::Vector3d> &vecVector,
+                           PointCloudT &point_cloud)
+{
+  point_cloud.width = 1;
+  point_cloud.height = 1;
+  point_cloud.points.clear();
+
+  for (const auto &vec: vecVector)
+  {
+    point_cloud.push_back(
+      pcl::PointXYZ(vec(0), vec(1), vec(2))
+    );
+  }
+}
+
 /**
  * visualizing original (without scene prediction) information gain
  */
@@ -61,8 +87,11 @@ public:
   /** Get random (feasible) state */
   bool getRandomState(StateVecT &state_vec);
 
-  /** Publish state whose Info Gain is being measured */
+  /** Publish state whose Info Gain (Ig) is being measured */
   void publishIgState(const StateVecT &state_vec);
+
+  /** Publish nodes which contributed to Info Gain (Ig) */
+  void publishIgNodes(const std::vector<Eigen::Vector3d> &gain_nodes);
 
 protected:
   std::unique_ptr< nbvInspection::nbvPlanner<StateVecT> > nbv_planner_;
@@ -72,6 +101,7 @@ protected:
   ros::NodeHandle local_nh_;
 
   ros::Publisher ig_pose_publisher_;
+  ros::Publisher ig_nodes_publisher_;
 }; //endclass OriginalGainViz
 
 OriginalGainViz::OriginalGainViz()
@@ -80,7 +110,9 @@ OriginalGainViz::OriginalGainViz()
   ig_pose_publisher_ = local_nh_.advertise<geometry_msgs::PoseStamped>(
       "ig_pose", 5, true
   );
-
+  ig_nodes_publisher_ = local_nh_.advertise<PointCloudT>(
+      "ig_nodes", 5, true
+  );
   local_nh_.param("tf_frame", tf_frame_id_, std::string("world"));
 
   std::string octomap_file;
@@ -160,6 +192,17 @@ void OriginalGainViz::publishIgState(const StateVecT &state_vec)
   ig_pose_publisher_.publish(pose_stamped);
 }
 
+void OriginalGainViz::publishIgNodes(
+    const std::vector<Eigen::Vector3d> &gain_nodes
+)
+{
+  PointCloudT point_cloud;
+  point_cloud.header.frame_id = tf_frame_id_;
+  pcl_conversions::toPCL(ros::Time::now(), point_cloud.header.stamp);
+  vecVectorToPointCloud(gain_nodes, point_cloud);
+  ig_nodes_publisher_.publish(point_cloud);
+}
+
 void OriginalGainViz::vizInfoGain()
 {
   auto tree = dynamic_cast<nbvInspection::RrtTree*>(
@@ -172,6 +215,7 @@ void OriginalGainViz::vizInfoGain()
   }
 
   double gain = 0.0;
+  std::vector<Eigen::Vector3d> gain_nodes;
   StateVecT random_state;
   // get a state with non-zero gain
   do
@@ -180,12 +224,13 @@ void OriginalGainViz::vizInfoGain()
     {
       return;
     }
-    gain = tree->gain(random_state);
+    gain = tree->gain(random_state, &gain_nodes);
   } while (gain == 0.0 && ros::ok());
 
   ROS_INFO_STREAM("random state: " << random_state.transpose());
+  ROS_INFO("Gain: %f, Gain nodes: %lu", gain, gain_nodes.size());
   publishIgState(random_state);
-  ROS_INFO("Gain: %f", gain);
+  publishIgNodes(gain_nodes);
 
 }
 

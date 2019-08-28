@@ -12,6 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   tf2
   tf2_geometry_msgs
+  pcl_ros
+  pcl_conversions
   kdtree
   multiagent_collision_check
 )
