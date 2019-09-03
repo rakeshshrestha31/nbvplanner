@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   kdtree
   multiagent_collision_check
   scene_completion_3d_msgs
+  scene_completion_3d_interface
 )
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)

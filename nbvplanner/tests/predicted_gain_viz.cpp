@@ -10,7 +10,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <scene_completion_3d_msgs/GetCompleteScene.h>
 
 // PCL specific includes
 #include <pcl_ros/point_cloud.h>
@@ -25,6 +24,12 @@
 #include <nbvplanner/nbvp.hpp>
 
 #include <nbvplanner_tests/utils.h>
+
+// custom includes
+// directly use scene_completion_3d_interface as shared library
+// instead of using ROS service interface
+// #include <scene_completion_3d_msgs/GetCompleteScene.h>
+#include <scene_completion_3d_interface/scene_completion_3d_interface.h>
 
 using namespace nbvplanner_tests;
 
@@ -51,7 +56,12 @@ public:
   void getCompleteScene();
 
 protected:
+  using SceneCompletion3dInterface =
+      scene_completion_3d_interface::SceneCompletion3dInterface;
+
   std::unique_ptr< nbvInspection::nbvPlanner<StateVecT> > nbv_planner_;
+  SceneCompletion3dInterface scene_completion_interface_;
+
   std::string tf_frame_id_;
 
   ros::NodeHandle global_nh_;
@@ -60,7 +70,6 @@ protected:
   ros::Publisher ig_pose_publisher_;
   ros::Publisher ig_nodes_publisher_;
 
-  ros::ServiceClient complete_scene_client_;
 }; //endclass PredictedGainViz
 
 PredictedGainViz::PredictedGainViz()
@@ -72,10 +81,6 @@ PredictedGainViz::PredictedGainViz()
   ig_nodes_publisher_ = local_nh_.advertise<PointCloudT>(
       "ig_nodes", 5, true
   );
-  complete_scene_client_ =
-      global_nh_.serviceClient<scene_completion_3d_msgs::GetCompleteScene>(
-          "get_complete_scene"
-      );
 
   local_nh_.param("tf_frame", tf_frame_id_, std::string("world"));
 
@@ -169,21 +174,13 @@ void PredictedGainViz::publishIgNodes(
 
 void PredictedGainViz::getCompleteScene()
 {
-  const auto octree = nbv_planner_->getOctomapManager()->getOctree();
-  octomap_msgs::Octomap octomap_msg;
-  octomap_msgs::fullMapToMsg(*octree, octomap_msg);
+  const auto input_octree = nbv_planner_->getOctomapManager()->getOctree();
+  scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
+  sensor_msgs::PointCloud2 completed_points;
 
-  scene_completion_3d_msgs::GetCompleteScene complete_scene_srv;
-  complete_scene_srv.request.input_octomap = octomap_msg;
-
-  if (complete_scene_client_.call(complete_scene_srv))
-  {
-    ROS_INFO("Complete Scene service successfully called");
-  }
-  else
-  {
-    ROS_ERROR("Complete Scene service call failed");
-  }
+  auto success = scene_completion_interface_.completeScene(
+    input_octree, completed_octree, completed_points
+  );
 }
 
 void PredictedGainViz::vizInfoGain()
@@ -215,7 +212,6 @@ void PredictedGainViz::vizInfoGain()
   ROS_INFO("Gain: %f, Gain nodes: %lu", gain, gain_nodes.size());
   publishIgState(random_state);
   publishIgNodes(gain_nodes);
-
 }
 
 int main(int argc, char **argv)
