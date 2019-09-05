@@ -20,6 +20,8 @@
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
 
+#include <octomap_world/octomap_manager.h>
+
 #include <nbvplanner/nbvp.h>
 #include <nbvplanner/nbvp.hpp>
 
@@ -32,6 +34,13 @@
 #include <scene_completion_3d_interface/scene_completion_3d_interface.h>
 
 using namespace nbvplanner_tests;
+
+// free function
+void publishVectorCloud(
+    const std::vector<Eigen::Vector3d> &vector_cloud,
+    ros::Publisher &point_cloud_pub,
+    const std::string &tf_frame_id
+);
 
 /**
  * visualizing information gain with scene prediction
@@ -46,14 +55,22 @@ public:
   /** Get random (feasible) state */
   bool getRandomState(StateVecT &state_vec);
 
+  /** Get RRT tree from NBV object */
+  nbvInspection::RrtTree* getRrtTree();
+
   /** Publish state whose Info Gain (Ig) is being measured */
   void publishIgState(const StateVecT &state_vec);
 
   /** Publish nodes which contributed to Info Gain (Ig) */
   void publishIgNodes(const std::vector<Eigen::Vector3d> &gain_nodes);
 
+  /** Publish nodes which contributed to Info Gain (Ig) from predicted map*/
+  void publishIgPredictedNodes(const std::vector<Eigen::Vector3d> &gain_nodes);
+
   /** Get complete scene from the map created thus far */
-  void getCompleteScene();
+  void getCompleteScene(
+      scene_completion_3d_interface::OcTreeTPtr &_completed_octree
+  );
 
 protected:
   using SceneCompletion3dInterface =
@@ -69,6 +86,7 @@ protected:
 
   ros::Publisher ig_pose_publisher_;
   ros::Publisher ig_nodes_publisher_;
+  ros::Publisher ig_predicted_nodes_publisher_;
 
 }; //endclass PredictedGainViz
 
@@ -80,6 +98,9 @@ PredictedGainViz::PredictedGainViz()
   );
   ig_nodes_publisher_ = local_nh_.advertise<PointCloudT>(
       "ig_nodes", 5, true
+  );
+  ig_predicted_nodes_publisher_ = local_nh_.advertise<PointCloudT>(
+      "ig_predicted_nodes", 5, true
   );
 
   local_nh_.param("tf_frame", tf_frame_id_, std::string("world"));
@@ -161,42 +182,83 @@ void PredictedGainViz::publishIgState(const StateVecT &state_vec)
   ig_pose_publisher_.publish(pose_stamped);
 }
 
+// free function
+void publishVectorCloud(
+    const std::vector<Eigen::Vector3d> &vector_cloud,
+    ros::Publisher &point_cloud_pub,
+    const std::string &tf_frame_id
+)
+{
+  if (vector_cloud.empty())
+  {
+    return;
+  }
+  PointCloudT point_cloud;
+  point_cloud.header.frame_id = tf_frame_id;
+  pcl_conversions::toPCL(ros::Time::now(), point_cloud.header.stamp);
+  vecVectorToPointCloud(vector_cloud, point_cloud);
+  point_cloud_pub.publish(point_cloud);
+}
+
 void PredictedGainViz::publishIgNodes(
     const std::vector<Eigen::Vector3d> &gain_nodes
 )
 {
-  PointCloudT point_cloud;
-  point_cloud.header.frame_id = tf_frame_id_;
-  pcl_conversions::toPCL(ros::Time::now(), point_cloud.header.stamp);
-  vecVectorToPointCloud(gain_nodes, point_cloud);
-  ig_nodes_publisher_.publish(point_cloud);
+  return publishVectorCloud(gain_nodes, ig_nodes_publisher_, tf_frame_id_);
 }
 
-void PredictedGainViz::getCompleteScene()
+void PredictedGainViz::publishIgPredictedNodes(
+    const std::vector<Eigen::Vector3d> &gain_nodes
+)
 {
-  const auto input_octree = nbv_planner_->getOctomapManager()->getOctree();
-  scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
-  sensor_msgs::PointCloud2 completed_points;
-
-  auto success = scene_completion_interface_.completeScene(
-    input_octree, completed_octree, completed_points
+  return publishVectorCloud(
+      gain_nodes, ig_predicted_nodes_publisher_, tf_frame_id_
   );
 }
 
-void PredictedGainViz::vizInfoGain()
+void PredictedGainViz::getCompleteScene(
+    scene_completion_3d_interface::OcTreeTPtr &_completed_octree
+)
 {
-  getCompleteScene();
+  const auto input_octree = nbv_planner_->getOctomapManager()->getOctree();
+  _completed_octree = nullptr;
+  sensor_msgs::PointCloud2 completed_points;
+
+  auto success = scene_completion_interface_.completeScene(
+    input_octree, _completed_octree, completed_points
+  );
+}
+
+nbvInspection::RrtTree* PredictedGainViz::getRrtTree()
+{
   auto tree = dynamic_cast<nbvInspection::RrtTree*>(
       nbv_planner_->tree_
   );
   if (!tree)
   {
     ROS_ERROR("Could not get RRT Tree");
+  }
+  return tree;
+}
+
+void PredictedGainViz::vizInfoGain()
+{
+  scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
+  getCompleteScene(completed_octree);
+  volumetric_mapping::OctomapManager predicted_octomap_manager(
+      global_nh_, local_nh_, completed_octree, /*subscribe_topics=*/false
+  );
+
+  auto tree = getRrtTree();
+  if (!tree)
+  {
     return;
   }
 
   double gain = 0.0;
+  double predicted_gain = 0.0;
   std::vector<Eigen::Vector3d> gain_nodes;
+  std::vector<Eigen::Vector3d> predicted_gain_nodes;
   StateVecT random_state;
   // get a state with non-zero gain
   do
@@ -205,13 +267,22 @@ void PredictedGainViz::vizInfoGain()
     {
       return;
     }
-    gain = tree->gain(random_state, &gain_nodes);
+    gain = tree->gain(
+        random_state, &gain_nodes, &predicted_gain_nodes,
+        &predicted_gain, &predicted_octomap_manager
+    );
   } while (gain == 0.0 && ros::ok());
 
   ROS_INFO_STREAM("random state: " << random_state.transpose());
   ROS_INFO("Gain: %f, Gain nodes: %lu", gain, gain_nodes.size());
+  ROS_INFO(
+      "Predicted Gain: %f, Gain nodes: %lu",
+      predicted_gain, predicted_gain_nodes.size()
+  );
+
   publishIgState(random_state);
   publishIgNodes(gain_nodes);
+  publishIgPredictedNodes(predicted_gain_nodes);
 }
 
 int main(int argc, char **argv)
