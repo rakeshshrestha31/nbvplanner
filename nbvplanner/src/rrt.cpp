@@ -564,25 +564,19 @@ double nbvInspection::RrtTree::gain(
         }
         // Check cell status and add to the gain considering the corresponding factor.
         double probability;
-        volumetric_mapping::OctomapManager::CellStatus node = manager_->getCellProbabilityPoint(
+        using CellStatus = volumetric_mapping::OctomapManager::CellStatus;
+        CellStatus node = manager_->getCellProbabilityPoint(
             vec, &probability);
-        std::map<volumetric_mapping::OctomapManager::CellStatus,
-                 decltype(params_.igUnmapped_)> cell_gains = {
-          {
-            volumetric_mapping::OctomapManager::CellStatus::kUnknown,
-            params_.igUnmapped_
-          }, {
-            volumetric_mapping::OctomapManager::CellStatus::kOccupied,
-            params_.igOccupied_
-          }, {
-            volumetric_mapping::OctomapManager::CellStatus::kFree,
-            params_.igFree_
-          }
+
+        std::map<CellStatus, decltype(params_.igUnmapped_)> cell_gains = {
+          {CellStatus::kUnknown,  params_.igUnmapped_},
+          {CellStatus::kOccupied, params_.igOccupied_},
+          {CellStatus::kFree,     params_.igFree_}
         };
 
         // Rayshooting to evaluate inspectability of cell
         if (cell_gains[node] > 1e-6
-            && volumetric_mapping::OctomapManager::CellStatus::kOccupied
+            && CellStatus::kOccupied
                   != this->manager_->getVisibility(origin, vec, false)) {
           gain += cell_gains[node];
           // TODO: Add probabilistic gain
@@ -595,7 +589,7 @@ double nbvInspection::RrtTree::gain(
           // the predicted gain is always lower than original
           // since the original implicitly assumes unknown as free
           if (predicted_octomap_manager && predicted_gain_nodes) {
-            if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
+            if (CellStatus::kOccupied
                   != predicted_octomap_manager->getVisibility(
                         origin, vec, false)) {
               predicted_gain_nodes->push_back(vec);
