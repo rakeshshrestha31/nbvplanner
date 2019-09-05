@@ -511,16 +511,23 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
 
 double nbvInspection::RrtTree::gain(
     StateVec state,
-    std::vector<Eigen::Vector3d> *gain_nodes/*=nullptr*/
-)
+    std::vector<Eigen::Vector3d> *gain_nodes/*=nullptr*/,
+    std::vector<Eigen::Vector3d> *predicted_gain_nodes/*=nullptr*/,
+    double *predicted_gain/*=nullptr*/,
+    const volumetric_mapping::OctomapManager * const
+        predicted_octomap_manager/*=nullptr*/)
 {
-// This function computes the gain
+  // This function computes the gain
   double gain = 0.0;
+  if (predicted_gain) {
+    *predicted_gain = 0;
+  }
+
   const double disc = manager_->getResolution();
   Eigen::Vector3d origin(state[0], state[1], state[2]);
   Eigen::Vector3d vec;
   double rangeSq = pow(params_.gainRange_, 2.0);
-// Iterate over all nodes within the allowed distance
+  // Iterate over all nodes within the allowed distance
   for (vec[0] = std::max(state[0] - params_.gainRange_, params_.minX_);
       vec[0] < std::min(state[0] + params_.gainRange_, params_.maxX_); vec[0] += disc) {
     for (vec[1] = std::max(state[1] - params_.gainRange_, params_.minY_);
@@ -584,20 +591,43 @@ double nbvInspection::RrtTree::gain(
           if (gain_nodes) {
             gain_nodes->push_back(vec);
           }
+
+          // the predicted gain is always lower than original
+          // since the original implicitly assumes unknown as free
+          if (predicted_octomap_manager && predicted_gain_nodes) {
+            if (volumetric_mapping::OctomapManager::CellStatus::kOccupied
+                  != predicted_octomap_manager->getVisibility(
+                        origin, vec, false)) {
+              predicted_gain_nodes->push_back(vec);
+              if (predicted_gain) {
+                (*predicted_gain) += cell_gains[node];
+              }
+            }
+          }
         }
       }
     }
   }
-// Scale with volume
-  gain *= pow(disc, 3.0);
-// Check the gain added by inspectable surface
+  // Scale with volume
+  auto scale = pow(disc, 3.0);
+  gain *= scale;
+  if (predicted_gain) {
+    (*predicted_gain) *= scale;
+  }
+
+  // Check the gain added by inspectable surface
   if (mesh_) {
     tf::Transform transform;
     transform.setOrigin(tf::Vector3(state.x(), state.y(), state.z()));
     tf::Quaternion quaternion;
     quaternion.setEuler(0.0, 0.0, state[3]);
     transform.setRotation(quaternion);
-    gain += params_.igArea_ * mesh_->computeInspectableArea(transform);
+    auto area_gain = params_.igArea_ * mesh_->computeInspectableArea(transform);
+    gain += area_gain;
+    if (predicted_gain)
+    {
+      (*predicted_gain) += area_gain;
+    }
   }
   return gain;
 }
