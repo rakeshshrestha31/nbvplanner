@@ -512,15 +512,15 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
 double nbvInspection::RrtTree::gain(
     StateVec state,
     std::vector<Eigen::Vector3d> *gain_nodes/*=nullptr*/,
-    std::vector<Eigen::Vector3d> *predicted_gain_nodes/*=nullptr*/,
-    double *predicted_gain/*=nullptr*/,
     const volumetric_mapping::OctomapManager * const
-        predicted_octomap_manager/*=nullptr*/)
+            predicted_octomap_manager/*=nullptr*/,
+    std::vector<Eigen::Vector3d> *predictive_gain_nodes/*=nullptr*/,
+    double *predictive_gain/*=nullptr*/) const
 {
   // This function computes the gain
-  double gain = 0.0;
-  if (predicted_gain) {
-    *predicted_gain = 0;
+  double original_gain = 0.0;
+  if (predictive_gain) {
+    *predictive_gain = 0;
   }
 
   const double disc = manager_->getResolution();
@@ -541,13 +541,11 @@ double nbvInspection::RrtTree::gain(
         }
         bool insideAFieldOfView = false;
         // Check that voxel center is inside one of the fields of view.
-        for (typename std::vector<std::vector<Eigen::Vector3d>>::iterator itCBN = params_
-            .camBoundNormals_.begin(); itCBN != params_.camBoundNormals_.end(); itCBN++) {
+        for (const auto &itCBN: params_.camBoundNormals_) {
           bool inThisFieldOfView = true;
-          for (typename std::vector<Eigen::Vector3d>::iterator itSingleCBN = itCBN->begin();
-              itSingleCBN != itCBN->end(); itSingleCBN++) {
+          for (const auto &itSingleCBN: itCBN) {
             Eigen::Vector3d normal = Eigen::AngleAxisd(state[3], Eigen::Vector3d::UnitZ())
-                * (*itSingleCBN);
+                * itSingleCBN;
             double val = dir.dot(normal.normalized());
             if (val < SQRT2 * disc) {
               inThisFieldOfView = false;
@@ -578,9 +576,9 @@ double nbvInspection::RrtTree::gain(
         if (cell_gains[node] > 1e-6
             && CellStatus::kOccupied
                   != this->manager_->getVisibility(origin, vec, false)) {
-          gain += cell_gains[node];
+          original_gain += cell_gains[node];
           // TODO: Add probabilistic gain
-          // gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+          // original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
 
           if (gain_nodes) {
             gain_nodes->push_back(vec);
@@ -588,25 +586,26 @@ double nbvInspection::RrtTree::gain(
 
           // the predicted gain is always lower than original
           // since the original implicitly assumes unknown as free
-          if (predicted_octomap_manager && predicted_gain_nodes) {
+          if (predicted_octomap_manager && predictive_gain_nodes) {
             if (CellStatus::kOccupied
                   != predicted_octomap_manager->getVisibility(
                         origin, vec, false)) {
-              predicted_gain_nodes->push_back(vec);
-              if (predicted_gain) {
-                (*predicted_gain) += cell_gains[node];
+              predictive_gain_nodes->push_back(vec);
+              if (predictive_gain) {
+                (*predictive_gain) += cell_gains[node];
               }
             }
           }
         }
-      }
-    }
-  }
+      } //endfor(vec[2])
+    } //endfor(vec[1])
+  } //endfor(vec[0])
+
   // Scale with volume
   auto scale = pow(disc, 3.0);
-  gain *= scale;
-  if (predicted_gain) {
-    (*predicted_gain) *= scale;
+  original_gain *= scale;
+  if (predictive_gain) {
+    (*predictive_gain) *= scale;
   }
 
   // Check the gain added by inspectable surface
@@ -617,13 +616,13 @@ double nbvInspection::RrtTree::gain(
     quaternion.setEuler(0.0, 0.0, state[3]);
     transform.setRotation(quaternion);
     auto area_gain = params_.igArea_ * mesh_->computeInspectableArea(transform);
-    gain += area_gain;
-    if (predicted_gain)
+    original_gain += area_gain;
+    if (predictive_gain)
     {
-      (*predicted_gain) += area_gain;
+      (*predictive_gain) += area_gain;
     }
   }
-  return gain;
+  return original_gain;
 }
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(

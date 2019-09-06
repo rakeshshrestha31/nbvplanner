@@ -268,8 +268,8 @@ void PredictedGainViz::vizInfoGain()
       return;
     }
     gain = tree->gain(
-        random_state, &gain_nodes, &predicted_gain_nodes,
-        &predicted_gain, &predicted_octomap_manager
+        random_state, &gain_nodes, &predicted_octomap_manager,
+        &predicted_gain_nodes, &predicted_gain
     );
   } while (gain == 0.0 && ros::ok());
 

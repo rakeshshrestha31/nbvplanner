@@ -52,18 +52,18 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   void publishNode(Node<StateVec> * node);
   /**
    * @param[out] gain_nodes nodes that contributed to the (original) gain
-   * @param[out] predicted_gain_nodes nodes that contributed to the gain
-   *                from predicted map
-   * @param[out] predicted_gain gain from the predicted map
    * @param[in] predicted_octomap_manager octomap manager for the predicted map
+   * @param[out] predictive_gain_nodes nodes that contributed to the gain
+   *                from predicted map
+   * @param[out] predictive_gain gain from the predicted map
    */
   double gain(
       StateVec state,
       std::vector<Eigen::Vector3d> *gain_nodes=nullptr,
-      std::vector<Eigen::Vector3d> *predicted_gain_nodes=nullptr,
-      double *predicted_gain=nullptr,
       const volumetric_mapping::OctomapManager * const
-          predicted_octomap_manager=nullptr);
+                predicted_octomap_manager=nullptr,
+      std::vector<Eigen::Vector3d> *predictive_gain_nodes=nullptr,
+      double *predictive_gain=nullptr) const;
 
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
