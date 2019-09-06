@@ -112,8 +112,8 @@ PredictedGainViz::PredictedGainViz()
     exit(1);
   }
 
-  nbv_planner_.reset(
-      new nbvInspection::nbvPlanner<StateVecT>(global_nh_, local_nh_)
+  nbv_planner_ = std::make_unique< nbvInspection::nbvPlanner<StateVecT> >(
+      global_nh_, local_nh_
   );
 
   // no need to do this.
