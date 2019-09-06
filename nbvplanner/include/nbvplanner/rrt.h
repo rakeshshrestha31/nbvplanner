@@ -20,6 +20,7 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include <sstream>
+#include <memory>
 #include <eigen3/Eigen/Dense>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
@@ -51,19 +52,20 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
   /**
-   * @param[out] gain_nodes nodes that contributed to the (original) gain
-   * @param[in] predicted_octomap_manager octomap manager for the predicted map
+   * @param[in]  state state where the info gain is computed
+   * @param[out] original_gain_ptr original gain (optional)
+   * @param[out] original_gain_nodes nodes that contributed to the
+   *                original gain (optional)
    * @param[out] predictive_gain_nodes nodes that contributed to the gain
-   *                from predicted map
-   * @param[out] predictive_gain gain from the predicted map
+   *                from predicted map (optional)
+   * @param[out] predictive_gain_ptr gain from the predicted map (optional)
    */
   double gain(
       StateVec state,
-      std::vector<Eigen::Vector3d> *gain_nodes=nullptr,
-      const volumetric_mapping::OctomapManager * const
-                predicted_octomap_manager=nullptr,
-      std::vector<Eigen::Vector3d> *predictive_gain_nodes=nullptr,
-      double *predictive_gain=nullptr) const;
+      double *original_gain_ptr=nullptr,
+      std::vector<Eigen::Vector3d> *original_gain_nodes=nullptr,
+      double *predictive_gain_ptr=nullptr,
+      std::vector<Eigen::Vector3d> *predictive_gain_nodes=nullptr) const;
 
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);

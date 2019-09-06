@@ -225,17 +225,15 @@ std::shared_ptr<nbvInspection::RrtTree> PredictedGainViz::getRrtTree()
 
 void PredictedGainViz::vizInfoGain()
 {
-  scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
-  nbv_planner_->getCompleteScene(completed_octree);
-  volumetric_mapping::OctomapManager predicted_octomap_manager(
-      global_nh_, local_nh_, completed_octree, /*subscribe_topics=*/false
-  );
+  std::shared_ptr<volumetric_mapping::OctomapManager> predicted_octomap_manager(nullptr);
+  nbv_planner_->getCompletedOcTreeManager(predicted_octomap_manager);
 
   auto tree = getRrtTree();
   if (!tree)
   {
     return;
   }
+  tree->setPredictedOctomapManager(predicted_octomap_manager);
 
   double gain = 0.0;
   double predicted_gain = 0.0;
@@ -249,9 +247,9 @@ void PredictedGainViz::vizInfoGain()
     {
       return;
     }
-    gain = tree->gain(
-        random_state, &gain_nodes, &predicted_octomap_manager,
-        &predicted_gain_nodes, &predicted_gain
+    tree->gain(
+        random_state, &gain, &gain_nodes,
+        &predicted_gain, &predicted_gain_nodes
     );
   } while (gain == 0.0 && ros::ok());
 

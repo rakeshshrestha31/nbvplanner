@@ -100,6 +100,10 @@ class TreeBase
   stateVec exact_root_;
   std::vector<std::vector<Eigen::Vector3d>*> segments_;
   std::vector<std::string> agentNames_;
+
+  std::shared_ptr<volumetric_mapping::OctomapManager>
+      predictedOctomapManager_;
+
  public:
   TreeBase();
   TreeBase(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);
@@ -125,6 +129,12 @@ class TreeBase
   int getCounter();
   bool gainFound();
   void insertPointcloudWithTf(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
+
+  void setPredictedOctomapManager(
+      std::shared_ptr<volumetric_mapping::OctomapManager> &predictedManager)
+  {
+    predictedOctomapManager_ = predictedManager;
+  }
 };
 }
 

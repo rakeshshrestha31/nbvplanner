@@ -216,7 +216,13 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
   }
 
   if (use_predictive_ig_ && predictive_tree_) {
-    if (!getBestPath(predictive_tree_, req.header.frame_id, res.predictive_path)) {
+    std::shared_ptr<volumetric_mapping::OctomapManager>
+        predicted_map_manager(nullptr);
+    getCompletedOcTreeManager(predicted_map_manager);
+    predictive_tree_->setPredictedOctomapManager(predicted_map_manager);
+
+    if (!getBestPath(predictive_tree_,
+                     req.header.frame_id, res.predictive_path)) {
       return true;
     }
   }
@@ -252,8 +258,7 @@ template<typename stateVec>
 bool nbvInspection::nbvPlanner<stateVec>::getBestPath(
     const std::shared_ptr< TreeBase<stateVec> > &tree,
     const std::string &frame_id,
-    std::vector<geometry_msgs::Pose> &path
-)
+    std::vector<geometry_msgs::Pose> &path)
 {
   path.clear();
 
@@ -285,7 +290,7 @@ bool nbvInspection::nbvPlanner<stateVec>::getBestPath(
 }
 
 template<typename stateVec>
-bool nbvInspection::nbvPlanner<stateVec>::getCompleteScene(
+bool nbvInspection::nbvPlanner<stateVec>::getCompletedOcTree(
     scene_completion_3d_interface::OcTreeTPtr &completed_octree) const
 {
   if (!scene_completion_interface_) {
@@ -306,6 +311,22 @@ bool nbvInspection::nbvPlanner<stateVec>::getCompleteScene(
   );
 
   return success;
+}
+
+template<typename stateVec>
+bool nbvInspection::nbvPlanner<stateVec>::getCompletedOcTreeManager(
+      std::shared_ptr<volumetric_mapping::OctomapManager>
+          &completed_octree_manger) const
+{
+  scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
+  if (getCompletedOcTree(completed_octree) && completed_octree) {
+    completed_octree_manger =
+        std::make_shared<volumetric_mapping::OctomapManager>(
+            nh_, nh_private_, completed_octree);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 template<typename stateVec>

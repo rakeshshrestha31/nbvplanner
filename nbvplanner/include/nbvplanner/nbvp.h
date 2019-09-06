@@ -98,12 +98,18 @@ class nbvPlanner
    * Get best path from a given tree
    * @return whether the query was successful
    */
-  bool getBestPath(const std::shared_ptr< TreeBase<stateVec> > &tree,
-                   const std::string &frame_id,
-                   std::vector<geometry_msgs::Pose> &path);
+  bool getBestPath(
+      const std::shared_ptr< TreeBase<stateVec> > &tree,
+      const std::string &frame_id,
+      std::vector<geometry_msgs::Pose> &path);
 
-  bool getCompleteScene(
+  /** Get complete scene from the map created thus far */
+  bool getCompletedOcTree(
       scene_completion_3d_interface::OcTreeTPtr &completed_octree) const;
+
+  bool getCompletedOcTreeManager(
+      std::shared_ptr<volumetric_mapping::OctomapManager>
+          &completed_octree_manger) const;
 
   /**
    * wrapper over manager_.getMapSize() with some bells and whistles

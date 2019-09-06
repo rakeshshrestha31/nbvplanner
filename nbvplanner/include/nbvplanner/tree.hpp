@@ -39,6 +39,7 @@ nbvInspection::Node<stateVec>::~Node()
 
 template<typename stateVec>
 nbvInspection::TreeBase<stateVec>::TreeBase()
+  : predictedOctomapManager_(nullptr)
 {
   bestGain_ = params_.zero_gain_;
   bestNode_ = NULL;

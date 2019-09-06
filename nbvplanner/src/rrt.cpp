@@ -511,17 +511,13 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
 
 double nbvInspection::RrtTree::gain(
     StateVec state,
-    std::vector<Eigen::Vector3d> *gain_nodes/*=nullptr*/,
-    const volumetric_mapping::OctomapManager * const
-            predicted_octomap_manager/*=nullptr*/,
-    std::vector<Eigen::Vector3d> *predictive_gain_nodes/*=nullptr*/,
-    double *predictive_gain/*=nullptr*/) const
+    double *original_gain_ptr/*=nullptr*/,
+    std::vector<Eigen::Vector3d> *original_gain_nodes/*=nullptr*/,
+    double *predictive_gain_ptr/*=nullptr*/,
+    std::vector<Eigen::Vector3d> *predictive_gain_nodes/*=nullptr*/) const
 {
-  // This function computes the gain
   double original_gain = 0.0;
-  if (predictive_gain) {
-    *predictive_gain = 0;
-  }
+  double predictive_gain = 0.0;
 
   const double disc = manager_->getResolution();
   Eigen::Vector3d origin(state[0], state[1], state[2]);
@@ -577,22 +573,23 @@ double nbvInspection::RrtTree::gain(
             && CellStatus::kOccupied
                   != this->manager_->getVisibility(origin, vec, false)) {
           original_gain += cell_gains[node];
+
           // TODO: Add probabilistic gain
           // original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
 
-          if (gain_nodes) {
-            gain_nodes->push_back(vec);
+          if (original_gain_nodes) {
+            original_gain_nodes->push_back(vec);
           }
 
           // the predicted gain is always lower than original
           // since the original implicitly assumes unknown as free
-          if (predicted_octomap_manager && predictive_gain_nodes) {
+          if (predictedOctomapManager_) {
             if (CellStatus::kOccupied
-                  != predicted_octomap_manager->getVisibility(
+                  != predictedOctomapManager_->getVisibility(
                         origin, vec, false)) {
-              predictive_gain_nodes->push_back(vec);
-              if (predictive_gain) {
-                (*predictive_gain) += cell_gains[node];
+              predictive_gain += cell_gains[node];
+              if (predictive_gain_nodes) {
+                predictive_gain_nodes->push_back(vec);
               }
             }
           }
@@ -604,9 +601,7 @@ double nbvInspection::RrtTree::gain(
   // Scale with volume
   auto scale = pow(disc, 3.0);
   original_gain *= scale;
-  if (predictive_gain) {
-    (*predictive_gain) *= scale;
-  }
+  predictive_gain *= scale;
 
   // Check the gain added by inspectable surface
   if (mesh_) {
@@ -617,12 +612,17 @@ double nbvInspection::RrtTree::gain(
     transform.setRotation(quaternion);
     auto area_gain = params_.igArea_ * mesh_->computeInspectableArea(transform);
     original_gain += area_gain;
-    if (predictive_gain)
-    {
-      (*predictive_gain) += area_gain;
-    }
+    predictive_gain += area_gain;
   }
-  return original_gain;
+
+  if (predictive_gain_ptr) {
+    (*predictive_gain_ptr) = predictive_gain;
+  }
+  if (original_gain_ptr) {
+    (*original_gain_ptr) = original_gain;
+  }
+
+  return predictedOctomapManager_ ? predictive_gain : original_gain;
 }
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
