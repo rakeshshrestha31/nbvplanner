@@ -153,8 +153,8 @@ void OriginalGainViz::publishIgNodes(
 
 void OriginalGainViz::vizInfoGain()
 {
-  auto tree = dynamic_cast<nbvInspection::RrtTree*>(
-      nbv_planner_->tree_
+  auto tree = std::static_pointer_cast<nbvInspection::RrtTree>(
+      nbv_planner_->original_tree_
   );
   if (!tree)
   {

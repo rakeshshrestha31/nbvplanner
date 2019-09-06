@@ -56,7 +56,7 @@ public:
   bool getRandomState(StateVecT &state_vec);
 
   /** Get RRT tree from NBV object */
-  nbvInspection::RrtTree* getRrtTree();
+  std::shared_ptr<nbvInspection::RrtTree> getRrtTree();
 
   /** Publish state whose Info Gain (Ig) is being measured */
   void publishIgState(const StateVecT &state_vec);
@@ -67,17 +67,8 @@ public:
   /** Publish nodes which contributed to Info Gain (Ig) from predicted map*/
   void publishIgPredictedNodes(const std::vector<Eigen::Vector3d> &gain_nodes);
 
-  /** Get complete scene from the map created thus far */
-  void getCompleteScene(
-      scene_completion_3d_interface::OcTreeTPtr &_completed_octree
-  );
-
 protected:
-  using SceneCompletion3dInterface =
-      scene_completion_3d_interface::SceneCompletion3dInterface;
-
   std::unique_ptr< nbvInspection::nbvPlanner<StateVecT> > nbv_planner_;
-  SceneCompletion3dInterface scene_completion_interface_;
 
   std::string tf_frame_id_;
 
@@ -104,6 +95,10 @@ PredictedGainViz::PredictedGainViz()
   );
 
   local_nh_.param("tf_frame", tf_frame_id_, std::string("world"));
+
+  // params for NBV planner with Predictive Info gain (using predicted map)
+  local_nh_.setParam("use_predictive_ig", true);
+  local_nh_.setParam("compute_both_ig_trajectories", true);
 
   std::string octomap_file;
   if (!local_nh_.getParam("octomap_file", octomap_file))
@@ -216,23 +211,10 @@ void PredictedGainViz::publishIgPredictedNodes(
   );
 }
 
-void PredictedGainViz::getCompleteScene(
-    scene_completion_3d_interface::OcTreeTPtr &_completed_octree
-)
+std::shared_ptr<nbvInspection::RrtTree> PredictedGainViz::getRrtTree()
 {
-  const auto input_octree = nbv_planner_->getOctomapManager()->getOctree();
-  _completed_octree = nullptr;
-  sensor_msgs::PointCloud2 completed_points;
-
-  auto success = scene_completion_interface_.completeScene(
-    input_octree, _completed_octree, completed_points
-  );
-}
-
-nbvInspection::RrtTree* PredictedGainViz::getRrtTree()
-{
-  auto tree = dynamic_cast<nbvInspection::RrtTree*>(
-      nbv_planner_->tree_
+  auto tree = std::static_pointer_cast<nbvInspection::RrtTree>(
+      nbv_planner_->original_tree_
   );
   if (!tree)
   {
@@ -244,7 +226,7 @@ nbvInspection::RrtTree* PredictedGainViz::getRrtTree()
 void PredictedGainViz::vizInfoGain()
 {
   scene_completion_3d_interface::OcTreeTPtr completed_octree(nullptr);
-  getCompleteScene(completed_octree);
+  nbv_planner_->getCompleteScene(completed_octree);
   volumetric_mapping::OctomapManager predicted_octomap_manager(
       global_nh_, local_nh_, completed_octree, /*subscribe_topics=*/false
   );

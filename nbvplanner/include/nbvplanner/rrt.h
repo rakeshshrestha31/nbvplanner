@@ -67,6 +67,13 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
 
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);
+
+  std::vector<StateVec> getBestBranch() { return bestBranchMemory_; }
+
+  void setBestBranch(const std::vector<StateVec> &bestBranch) {
+    bestBranchMemory_ = bestBranch;
+  }
+
  protected:
   kdtree * kdTree_;
   std::stack<StateVec> history_;

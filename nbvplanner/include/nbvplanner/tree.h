@@ -116,7 +116,11 @@ class TreeBase
   virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame) = 0;
   virtual void clear() = 0;
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame) = 0;
+
   virtual void memorizeBestBranch() = 0;
+  virtual std::vector<stateVec> getBestBranch() = 0;
+  virtual void setBestBranch(const std::vector<stateVec> &bestBranch) = 0;
+
   void setParams(Params params);
   int getCounter();
   bool gainFound();

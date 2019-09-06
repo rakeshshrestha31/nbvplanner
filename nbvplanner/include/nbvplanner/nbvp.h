@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <fstream>
+#include <memory>
 #include <eigen3/Eigen/Dense>
 #include <ros/ros.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -29,6 +30,8 @@
 #include <nbvplanner/mesh_structure.h>
 #include <nbvplanner/tree.hpp>
 #include <nbvplanner/rrt.h>
+
+#include <scene_completion_3d_interface/scene_completion_3d_interface.h>
 
 #define SQ(x) ((x)*(x))
 #define SQRT2 0.70711
@@ -59,10 +62,23 @@ class nbvPlanner
   volumetric_mapping::OctomapManager * manager_;
 
   bool ready_;
+  /** Whether to use Information Gain from predicted map */
+  bool use_predictive_ig_;
+  /**
+   * Whether to compute both predictive and original trajectories
+   *    Only valid when use_predictive_ig_ is true
+   */
+  bool compute_both_ig_trajectories_;
 
+  using SceneCompletion3dInterface =
+      scene_completion_3d_interface::SceneCompletion3dInterface;
+  std::unique_ptr<SceneCompletion3dInterface> scene_completion_interface_;
  public:
   typedef std::vector<stateVec> vector_t;
-  TreeBase<stateVec> * tree_;
+  /** (RRT) Tree using original information gain */
+  std::shared_ptr< TreeBase<stateVec> > original_tree_;
+  /** (RRT) Tree using predictive information gain */
+  std::shared_ptr< TreeBase<stateVec> > predictive_tree_;
 
   nbvPlanner(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
   ~nbvPlanner();
@@ -74,6 +90,20 @@ class nbvPlanner
   void insertPointcloudWithTfCamUp(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void insertPointcloudWithTfCamDown(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
   void evasionCallback(const multiagent_collision_check::Segment& segmentMsg);
+
+  /** Initialize the (RRT) tree(s) */
+  void initializeTrees();
+
+  /**
+   * Get best path from a given tree
+   * @return whether the query was successful
+   */
+  bool getBestPath(const std::shared_ptr< TreeBase<stateVec> > &tree,
+                   const std::string &frame_id,
+                   std::vector<geometry_msgs::Pose> &path);
+
+  bool getCompleteScene(
+      scene_completion_3d_interface::OcTreeTPtr &completed_octree) const;
 
   /**
    * wrapper over manager_.getMapSize() with some bells and whistles
