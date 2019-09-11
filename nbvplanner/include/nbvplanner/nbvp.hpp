@@ -171,7 +171,9 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::posCallback(
     const geometry_msgs::PoseWithCovarianceStamped& pose)
 {
-  original_tree_->setStateFromPoseMsg(pose);
+  if (original_tree_) {
+    original_tree_->setStateFromPoseMsg(pose);
+  }
   if (predictive_tree_) {
     predictive_tree_->setStateFromPoseMsg(pose);
   }
@@ -183,7 +185,9 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::odomCallback(
     const nav_msgs::Odometry& pose)
 {
-  original_tree_->setStateFromOdometryMsg(pose);
+  if (original_tree_) {
+    original_tree_->setStateFromOdometryMsg(pose);
+  }
   if (predictive_tree_) {
     predictive_tree_->setStateFromOdometryMsg(pose);
   }
@@ -226,15 +230,20 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
       return true;
     }
   }
-  if (!use_predictive_ig_ || !predictive_tree_ || compute_both_ig_trajectories_) {
-    if (!getBestPath(original_tree_, req.header.frame_id, res.original_path)) {
-      return true;
-    }
 
-    if (use_predictive_ig_ && predictive_tree_) {
-      // set best from from predictive tree
-      // so that the next sampling will be initialized properly
-      original_tree_->setBestBranch(predictive_tree_->getBestBranch());
+  if (!use_predictive_ig_ || !predictive_tree_ || compute_both_ig_trajectories_) {
+    if (original_tree_) {
+      if (!getBestPath(original_tree_, req.header.frame_id, res.original_path)) {
+        return true;
+      }
+
+      if (use_predictive_ig_ && predictive_tree_) {
+        // set best from from predictive tree
+        // so that the next sampling will be initialized properly
+        original_tree_->setBestBranch(predictive_tree_->getBestBranch());
+      }
+    } else {
+      ROS_ERROR("original_tree_ null, shouldn't happen here");
     }
   }
 
@@ -521,7 +530,9 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTf(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    original_tree_->insertPointcloudWithTf(pointcloud);
+    if (original_tree_) {
+      original_tree_->insertPointcloudWithTf(pointcloud);
+    }
     if (predictive_tree_) {
       predictive_tree_->insertPointcloudWithTf(pointcloud);
     }
@@ -535,7 +546,9 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamUp(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    original_tree_->insertPointcloudWithTf(pointcloud);
+    if (original_tree_) {
+      original_tree_->insertPointcloudWithTf(pointcloud);
+    }
     if (predictive_tree_) {
       predictive_tree_->insertPointcloudWithTf(pointcloud);
     }
@@ -549,7 +562,9 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamDown(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    original_tree_->insertPointcloudWithTf(pointcloud);
+    if (original_tree_) {
+      original_tree_->insertPointcloudWithTf(pointcloud);
+    }
     if (predictive_tree_) {
       predictive_tree_->insertPointcloudWithTf(pointcloud);
     }
@@ -561,7 +576,9 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::evasionCallback(
     const multiagent_collision_check::Segment& segmentMsg)
 {
-  original_tree_->evade(segmentMsg);
+  if (original_tree_) {
+    original_tree_->evade(segmentMsg);
+  }
   if (predictive_tree_) {
     predictive_tree_->evade(segmentMsg);
   }
