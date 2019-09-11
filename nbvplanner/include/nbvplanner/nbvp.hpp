@@ -240,7 +240,7 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
       if (use_predictive_ig_ && predictive_tree_) {
         // set best from from predictive tree
         // so that the next sampling will be initialized properly
-        original_tree_->setBestBranch(predictive_tree_->getBestBranch());
+        // original_tree_->setBestBranch(predictive_tree_->getBestBranch());
       }
     } else {
       ROS_ERROR("original_tree_ null, shouldn't happen here");
@@ -331,7 +331,8 @@ bool nbvInspection::nbvPlanner<stateVec>::getCompletedOcTreeManager(
   if (getCompletedOcTree(completed_octree) && completed_octree) {
     completed_octree_manger =
         std::make_shared<volumetric_mapping::OctomapManager>(
-            nh_, nh_private_, completed_octree);
+            nh_, nh_private_, completed_octree,
+            /*subscribe_topics=*/false);
     return true;
   } else {
     return false;
