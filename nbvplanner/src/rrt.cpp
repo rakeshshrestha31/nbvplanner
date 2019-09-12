@@ -598,6 +598,11 @@ double nbvInspection::RrtTree::gain(
     } //endfor(vec[1])
   } //endfor(vec[0])
 
+  if (predictive_gain == 0.0) {
+    predictive_gain = original_gain;
+    ROS_DEBUG_STREAM("Predictive gain 0 for state " << state.transpose());
+  }
+
   // Scale with volume
   auto scale = pow(disc, 3.0);
   original_gain *= scale;
