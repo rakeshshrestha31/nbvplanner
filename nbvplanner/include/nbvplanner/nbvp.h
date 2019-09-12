@@ -38,6 +38,11 @@
 
 namespace nbvInspection {
 
+enum BestPathState
+{
+  NOT_FOUND=0, OKAY, ALMOST_OKAY, LEN
+};
+
 template<typename stateVec>
 class nbvPlanner
 {
@@ -73,8 +78,10 @@ class nbvPlanner
   using SceneCompletion3dInterface =
       scene_completion_3d_interface::SceneCompletion3dInterface;
   std::unique_ptr<SceneCompletion3dInterface> scene_completion_interface_;
+
  public:
   typedef std::vector<stateVec> vector_t;
+
   /** (RRT) Tree using original information gain */
   std::shared_ptr< TreeBase<stateVec> > original_tree_;
   /** (RRT) Tree using predictive information gain */
@@ -96,9 +103,9 @@ class nbvPlanner
 
   /**
    * Get best path from a given tree
-   * @return whether the query was successful
+   * @return state of the query
    */
-  bool getBestPath(
+  BestPathState getBestPath(
       const std::shared_ptr< TreeBase<stateVec> > &tree,
       const std::string &frame_id,
       std::vector<geometry_msgs::Pose> &path);

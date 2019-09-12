@@ -225,15 +225,20 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     getCompletedOcTreeManager(predicted_map_manager);
     predictive_tree_->setPredictedOctomapManager(predicted_map_manager);
 
-    if (!getBestPath(predictive_tree_,
-                     req.header.frame_id, res.predictive_path)) {
+    auto path_state = getBestPath(
+        predictive_tree_, req.header.frame_id, res.predictive_path);
+    res.predictive_path_success = (path_state != BestPathState::NOT_FOUND);
+    if (path_state != BestPathState::OKAY) {
       return true;
     }
   }
 
   if (!use_predictive_ig_ || !predictive_tree_ || compute_both_ig_trajectories_) {
     if (original_tree_) {
-      if (!getBestPath(original_tree_, req.header.frame_id, res.original_path)) {
+      auto path_state = getBestPath(
+          original_tree_, req.header.frame_id, res.original_path);
+      res.original_path_success = (path_state != BestPathState::NOT_FOUND);
+      if (path_state != BestPathState::OKAY) {
         return true;
       }
 
@@ -264,7 +269,8 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
 }
 
 template<typename stateVec>
-bool nbvInspection::nbvPlanner<stateVec>::getBestPath(
+nbvInspection::BestPathState
+nbvInspection::nbvPlanner<stateVec>::getBestPath(
     const std::shared_ptr< TreeBase<stateVec> > &tree,
     const std::string &frame_id,
     std::vector<geometry_msgs::Pose> &path)
@@ -279,14 +285,14 @@ bool nbvInspection::nbvPlanner<stateVec>::getBestPath(
   int loopCount = 0;
   while ((!tree->gainFound() || tree->getCounter() < params_.initIterations_) && ros::ok()) {
     if (tree->getCounter() > params_.cuttoffIterations_) {
-      ROS_INFO("No gain found, shutting down");
-      ros::shutdown();
-      return false;
+      ROS_INFO("No gain found, requesting shutdown");
+      // ros::shutdown();
+      return BestPathState::NOT_FOUND;
     }
     if (loopCount > 1000 * (tree->getCounter() + 1)) {
       ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
       path = tree->getPathBackToPrevious(frame_id);
-      return false;
+      return BestPathState::ALMOST_OKAY;
     }
     tree->iterate(1);
     loopCount++;
@@ -295,7 +301,7 @@ bool nbvInspection::nbvPlanner<stateVec>::getBestPath(
   path = tree->getBestEdge(frame_id);
 
   tree->memorizeBestBranch();
-  return true;
+  return BestPathState::OKAY;
 }
 
 template<typename stateVec>

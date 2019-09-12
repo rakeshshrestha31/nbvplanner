@@ -1,4 +1,6 @@
 Header header
 -------
 geometry_msgs/Pose[] original_path
+bool original_path_success
 geometry_msgs/Pose[] predictive_path
+bool predictive_path_success
