@@ -580,17 +580,15 @@ double nbvInspection::RrtTree::gain(
           if (original_gain_nodes) {
             original_gain_nodes->push_back(vec);
           }
+        }
 
-          // the predicted gain is always lower than original
-          // since the original implicitly assumes unknown as free
-          if (predictedOctomapManager_) {
-            if (CellStatus::kOccupied
-                  != predictedOctomapManager_->getVisibility(
-                        origin, vec, false)) {
-              predictive_gain += cell_gains[node];
-              if (predictive_gain_nodes) {
-                predictive_gain_nodes->push_back(vec);
-              }
+        if (predictedOctomapManager_) {
+          if (CellStatus::kOccupied
+                != predictedOctomapManager_->getVisibility(
+                      origin, vec, false)) {
+            predictive_gain += cell_gains[node];
+            if (predictive_gain_nodes) {
+              predictive_gain_nodes->push_back(vec);
             }
           }
         }
@@ -598,9 +596,11 @@ double nbvInspection::RrtTree::gain(
     } //endfor(vec[1])
   } //endfor(vec[0])
 
-  if (predictive_gain == 0.0) {
-    predictive_gain = original_gain;
-    ROS_DEBUG_STREAM("Predictive gain 0 for state " << state.transpose());
+  if (predictedOctomapManager_
+      && predictive_gain == 0.0
+      && original_gain > 0.0) {
+    // predictive_gain = original_gain;
+    ROS_WARN_STREAM("Predictive gain 0 for state " << state.transpose());
   }
 
   // Scale with volume
