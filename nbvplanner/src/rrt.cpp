@@ -563,35 +563,42 @@ double nbvInspection::RrtTree::gain(
             vec, &probability);
 
         std::map<CellStatus, decltype(params_.igUnmapped_)> cell_gains = {
-          {CellStatus::kUnknown,  params_.igUnmapped_},
-          {CellStatus::kOccupied, params_.igOccupied_},
-          {CellStatus::kFree,     params_.igFree_}
+          {CellStatus::kUnmappable, 0.0f},
+          {CellStatus::kUnknown,    params_.igUnmapped_},
+          {CellStatus::kOccupied,   params_.igOccupied_},
+          {CellStatus::kFree,       params_.igFree_}
         };
 
-        // Rayshooting to evaluate inspectability of cell
-        if (cell_gains[node] > 1e-6
-            && CellStatus::kOccupied
-                  != this->manager_->getVisibility(origin, vec, false)) {
-          original_gain += cell_gains[node];
+        if (cell_gains.at(node) > 1e-6) {
+          // Rayshooting to evaluate inspectability of cell
+          const auto original_visibility =
+              this->manager_->getVisibility(origin, vec, false);
 
-          // TODO: Add probabilistic gain
-          // original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+          if (original_visibility != CellStatus::kUnmappable
+              && original_visibility != CellStatus::kOccupied) {
+            original_gain += cell_gains[node];
 
-          if (original_gain_nodes) {
-            original_gain_nodes->push_back(vec);
-          }
-        }
+            // TODO: Add probabilistic gain
+            // original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
 
-        if (predictedOctomapManager_) {
-          if (CellStatus::kOccupied
-                != predictedOctomapManager_->getVisibility(
-                      origin, vec, false)) {
-            predictive_gain += cell_gains[node];
-            if (predictive_gain_nodes) {
-              predictive_gain_nodes->push_back(vec);
+            if (original_gain_nodes) {
+              original_gain_nodes->push_back(vec);
             }
           }
-        }
+
+          if (predictedOctomapManager_) {
+            const auto predicted_visibility =
+                predictedOctomapManager_->getVisibility(origin, vec, false);
+
+            if (predicted_visibility != CellStatus::kUnmappable
+                && predicted_visibility != CellStatus::kOccupied) {
+              predictive_gain += cell_gains[node];
+              if (predictive_gain_nodes) {
+                predictive_gain_nodes->push_back(vec);
+              }
+            }
+          }
+        } // endif (cell_gains.at(node) > 1e-6)
       } //endfor(vec[2])
     } //endfor(vec[1])
   } //endfor(vec[0])
