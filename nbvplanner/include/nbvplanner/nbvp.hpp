@@ -114,9 +114,7 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
   nh_private_.param("use_predictive_ig", use_predictive_ig_, false);
   nh_private_.param("compute_both_ig_trajectories", compute_both_ig_trajectories_, false);
 
-  if (use_predictive_ig_) {
-    scene_completion_interface_ = std::make_unique<SceneCompletion3dInterface>();
-  }
+  scene_completion_interface_ = std::make_unique<SceneCompletion3dInterface>();
 
   initializeTrees();
 
@@ -235,6 +233,7 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
 
   if (!use_predictive_ig_ || !predictive_tree_ || compute_both_ig_trajectories_) {
     if (original_tree_) {
+      scene_completion_interface_->updateInputOcTree(manager_->getOctree());
       auto path_state = getBestPath(
           original_tree_, req.header.frame_id, res.original_path);
       res.original_path_success = (path_state != BestPathState::NOT_FOUND);
@@ -245,7 +244,7 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
       if (use_predictive_ig_ && predictive_tree_) {
         // set best from from predictive tree
         // so that the next sampling will be initialized properly
-        // original_tree_->setBestBranch(predictive_tree_->getBestBranch());
+        original_tree_->setBestBranch(predictive_tree_->getBestBranch());
       }
     } else {
       ROS_ERROR("original_tree_ null, shouldn't happen here");
