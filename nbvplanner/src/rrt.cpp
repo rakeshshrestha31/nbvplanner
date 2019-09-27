@@ -351,8 +351,16 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->parent_ = newParent;
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
-    newNode->gain_ = newParent->gain_
-        + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+
+    double original_gain;
+    double predictive_gain;
+    gain(newNode->state_,
+         original_gain, newNode->original_gain_nodes_,
+         predictive_gain, newNode->predictive_gain_nodes_);
+    newNode->original_gain_ += original_gain
+        * exp(-params_.degressiveCoeff_ * newNode->distance_);
+    newNode->predictive_gain_ += predictive_gain
+        * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -360,11 +368,23 @@ void nbvInspection::RrtTree::iterate(int iterations)
     publishNode(newNode);
 
     // Update best IG and node if applicable
-    if (newNode->gain_ > bestGain_) {
-      bestGain_ = newNode->gain_;
-      bestNode_ = newNode;
-    }
+    updateBestNode(newNode);
+
     counter_++;
+  }
+}
+
+void nbvInspection::updateBestNode(Node<stateVec> * newNode)
+{
+  if (newNode) {
+    if (newNode->original_gain_ > bestOriginalGain_) {
+      bestOriginalGain_ = newNode->original_gain_;
+      bestOriginalNode_ = newNode;
+    }
+    if (newNode->predictive_gain_ > bestPredictiveGain_) {
+      bestPredictiveGain_ = newNode->predictive_gain_;
+      bestPredictiveNode_ = newNode;
+    }
   }
 }
 
@@ -395,7 +415,8 @@ void nbvInspection::RrtTree::initialize()
 
   rootNode_ = new Node<StateVec>;
   rootNode_->distance_ = 0.0;
-  rootNode_->gain_ = params_.zero_gain_;
+  rootNode_->original_gain_ = params_.zero_gain_;
+  rootNode_->predictive_gain_ = params_.zero_gain_;
   rootNode_->parent_ = NULL;
 
   if (params_.exact_root_) {
@@ -446,8 +467,20 @@ void nbvInspection::RrtTree::initialize()
       newNode->parent_ = newParent;
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.push_back(newNode);
-      newNode->gain_ = newParent->gain_
-          + gain(newNode->state_) * exp(-params_.degressiveCoeff_ * newNode->distance_);
+
+      double original_gain;
+      double predictive_gain;
+      gain(newNode->state_,
+           original_gain, newNode->original_gain_nodes_,
+           predictive_gain, newNode->predictive_gain_nodes_);
+
+      newNode->original_gain_ =
+          newParent->original_gain_ +
+          original_gain * exp(-params_.degressiveCoeff_ * newNode->distance_);
+
+      newNode->predictive_gain_ =
+          newParent->predictive_gain_ +
+          predictive_gain * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -455,10 +488,8 @@ void nbvInspection::RrtTree::initialize()
       publishNode(newNode);
 
       // Update best IG and node if applicable
-      if (newNode->gain_ > bestGain_) {
-        bestGain_ = newNode->gain_;
-        bestNode_ = newNode;
-      }
+      updateBestNode(newNode);
+
       counter_++;
     }
   }
@@ -493,11 +524,31 @@ void nbvInspection::RrtTree::initialize()
   params_.inspectionPath_.publish(p);
 }
 
-std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string targetFrame)
+std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestOriginalEdge(
+    std::string targetFrame,
+    double * const gain/*=nullptr*/,
+    std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
+{
+  return getBestEdge(targetFrame, bestOriginalNode_, gain, gainNodes);
+}
+
+std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestPredictiveEdge(
+    std::string targetFrame,
+    double * const gain/*=nullptr*/,
+    std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
+{
+  return getBestEdge(targetFrame, bestPredictiveNode_, gain, gainNodes);
+}
+
+std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
+    std::string targetFrame,
+    const nbvInspection::Node<StateVec> * const bestNode,
+    double * const gain/*=nullptr*/,
+    std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
 {
 // This function returns the first edge of the best branch
   std::vector<geometry_msgs::Pose> ret;
-  nbvInspection::Node<StateVec> * current = bestNode_;
+  nbvInspection::Node<StateVec> * current = bestNode;
   if (current->parent_ != NULL) {
     while (current->parent_ != rootNode_ && current->parent_ != NULL) {
       current = current->parent_;
@@ -505,31 +556,40 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(std::string
     ret = samplePath(current->parent_->state_, current->state_, targetFrame);
     history_.push(current->parent_->state_);
     exact_root_ = current->state_;
+
+    if (gain) {
+      *gain = exact_root_.gain;
+    }
+    if (gainNodes) {
+      *gainNodes = exact_root_.gain_nodes;
+    }
   }
   return ret;
 }
 
-double nbvInspection::RrtTree::gain(
-    StateVec state,
-    double *original_gain_ptr/*=nullptr*/,
-    std::vector<Eigen::Vector3d> *original_gain_nodes/*=nullptr*/,
-    double *predictive_gain_ptr/*=nullptr*/,
-    std::vector<Eigen::Vector3d> *predictive_gain_nodes/*=nullptr*/) const
+void nbvInspection::RrtTree::gain(
+    StateVec _state,
+    double &_original_gain,
+    std::vector<Eigen::Vector3d> &_original_gain_nodes,
+    double &_predictive_gain,
+    std::vector<Eigen::Vector3d>  &_predictive_gain_nodes) const
 {
-  double original_gain = 0.0;
-  double predictive_gain = 0.0;
+  _original_gain = 0.0;
+  _predictive_gain = 0.0;
+  _original_gain_nodes.clear();
+  _predictive_gain_nodes.clear();
 
   const double disc = manager_->getResolution();
-  Eigen::Vector3d origin(state[0], state[1], state[2]);
+  Eigen::Vector3d origin(_state[0], _state[1], _state[2]);
   Eigen::Vector3d vec;
   double rangeSq = pow(params_.gainRange_, 2.0);
   // Iterate over all nodes within the allowed distance
-  for (vec[0] = std::max(state[0] - params_.gainRange_, params_.minX_);
-      vec[0] < std::min(state[0] + params_.gainRange_, params_.maxX_); vec[0] += disc) {
-    for (vec[1] = std::max(state[1] - params_.gainRange_, params_.minY_);
-        vec[1] < std::min(state[1] + params_.gainRange_, params_.maxY_); vec[1] += disc) {
-      for (vec[2] = std::max(state[2] - params_.gainRange_, params_.minZ_);
-          vec[2] < std::min(state[2] + params_.gainRange_, params_.maxZ_); vec[2] += disc) {
+  for (vec[0] = std::max(_state[0] - params_.gainRange_, params_.minX_);
+      vec[0] < std::min(_state[0] + params_.gainRange_, params_.maxX_); vec[0] += disc) {
+    for (vec[1] = std::max(_state[1] - params_.gainRange_, params_.minY_);
+        vec[1] < std::min(_state[1] + params_.gainRange_, params_.maxY_); vec[1] += disc) {
+      for (vec[2] = std::max(_state[2] - params_.gainRange_, params_.minZ_);
+          vec[2] < std::min(_state[2] + params_.gainRange_, params_.maxZ_); vec[2] += disc) {
         Eigen::Vector3d dir = vec - origin;
         // Skip if distance is too large
         if (dir.transpose().dot(dir) > rangeSq) {
@@ -540,7 +600,7 @@ double nbvInspection::RrtTree::gain(
         for (const auto &itCBN: params_.camBoundNormals_) {
           bool inThisFieldOfView = true;
           for (const auto &itSingleCBN: itCBN) {
-            Eigen::Vector3d normal = Eigen::AngleAxisd(state[3], Eigen::Vector3d::UnitZ())
+            Eigen::Vector3d normal = Eigen::AngleAxisd(_state[3], Eigen::Vector3d::UnitZ())
                 * itSingleCBN;
             double val = dir.dot(normal.normalized());
             if (val < SQRT2 * disc) {
@@ -576,14 +636,12 @@ double nbvInspection::RrtTree::gain(
 
           if (original_visibility != CellStatus::kUnmappable
               && original_visibility != CellStatus::kOccupied) {
-            original_gain += cell_gains[node];
+            _original_gain += cell_gains[node];
 
             // TODO: Add probabilistic gain
-            // original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
+            // _original_gain += params_.igProbabilistic_ * PROBABILISTIC_MODEL(probability);
 
-            if (original_gain_nodes) {
-              original_gain_nodes->push_back(vec);
-            }
+            _original_gain_nodes.push_back(vec);
           }
 
           if (predictedOctomapManager_) {
@@ -592,10 +650,8 @@ double nbvInspection::RrtTree::gain(
 
             if (predicted_visibility != CellStatus::kUnmappable
                 && predicted_visibility != CellStatus::kOccupied) {
-              predictive_gain += cell_gains[node];
-              if (predictive_gain_nodes) {
-                predictive_gain_nodes->push_back(vec);
-              }
+              _predictive_gain += cell_gains[node];
+              _predictive_gain_nodes.push_back(vec);
             }
           }
         } // endif (cell_gains.at(node) > 1e-6)
@@ -604,47 +660,48 @@ double nbvInspection::RrtTree::gain(
   } //endfor(vec[0])
 
   if (predictedOctomapManager_
-      && predictive_gain == 0.0
-      && original_gain > 0.0) {
-    // predictive_gain = original_gain;
-    ROS_WARN_STREAM("Predictive gain 0 for state " << state.transpose());
+      && _predictive_gain == 0.0
+      && _original_gain > 0.0) {
+    _predictive_gain = _original_gain * 0.25;
+    ROS_WARN_STREAM("Predictive gain 0 for state " << _state.transpose());
   }
 
   // Scale with volume
   auto scale = pow(disc, 3.0);
-  original_gain *= scale;
-  predictive_gain *= scale;
+  _original_gain *= scale;
+  _predictive_gain *= scale;
 
   // Check the gain added by inspectable surface
   if (mesh_) {
     tf::Transform transform;
-    transform.setOrigin(tf::Vector3(state.x(), state.y(), state.z()));
+    transform.setOrigin(tf::Vector3(_state.x(), _state.y(), _state.z()));
     tf::Quaternion quaternion;
-    quaternion.setEuler(0.0, 0.0, state[3]);
+    quaternion.setEuler(0.0, 0.0, _state[3]);
     transform.setRotation(quaternion);
     auto area_gain = params_.igArea_ * mesh_->computeInspectableArea(transform);
-    original_gain += area_gain;
-    predictive_gain += area_gain;
+    _original_gain += area_gain;
+    _predictive_gain += area_gain;
   }
-
-  if (predictive_gain_ptr) {
-    (*predictive_gain_ptr) = predictive_gain;
-  }
-  if (original_gain_ptr) {
-    (*original_gain_ptr) = original_gain;
-  }
-
-  return predictedOctomapManager_ ? predictive_gain : original_gain;
 }
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
-    std::string targetFrame)
+    std::string targetFrame,
+    float * const gain/*=nullptr*/,
+    std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
 {
   std::vector<geometry_msgs::Pose> ret;
   if (history_.empty()) {
     return ret;
   }
-  ret = samplePath(root_, history_.top(), targetFrame);
+
+  const auto history_top = history_.top();
+  ret = samplePath(root_, history_top, targetFrame);
+  if (gain) {
+    *gain = history_top.gain;
+  }
+  if (gain_nodes) {
+    *gain_nodes = history_top.gain_nodes;
+  }
   history_.pop();
   return ret;
 }
@@ -652,7 +709,8 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
 void nbvInspection::RrtTree::memorizeBestBranch()
 {
   bestBranchMemory_.clear();
-  Node<StateVec> * current = bestNode_;
+  Node<StateVec> * current = predictedOctomapManager_
+                           ? bestPredictiveNode_ : bestOriginalNode_;
   while (current->parent_ && current->parent_->parent_) {
     bestBranchMemory_.push_back(current->state_);
     current = current->parent_;
@@ -665,14 +723,18 @@ void nbvInspection::RrtTree::clear()
   rootNode_ = NULL;
 
   counter_ = 0;
-  bestGain_ = params_.zero_gain_;
-  bestNode_ = NULL;
+  bestOriginalGain_ = params_.zero_gain_;
+  bestPredictiveGain_ = params_.zero_gain_;
+  bestOriginalNode_ = NULL;
+  bestPredictiveNode_ = NULL;
 
   kd_free(kdTree_);
 }
 
 void nbvInspection::RrtTree::publishNode(Node<StateVec> * node)
 {
+  double gain = predictedOctomapManager_
+                  ? node->predictive_gain_ : node->original_gain_;
   visualization_msgs::Marker p;
   p.header.stamp = ros::Time::now();
   p.header.seq = g_ID_;
@@ -691,7 +753,7 @@ void nbvInspection::RrtTree::publishNode(Node<StateVec> * node)
   p.pose.orientation.y = quat.y();
   p.pose.orientation.z = quat.z();
   p.pose.orientation.w = quat.w();
-  p.scale.x = std::max(node->gain_ / 20.0, 0.05);
+  p.scale.x = std::max(gain / 20.0, 0.05);
   p.scale.y = 0.1;
   p.scale.z = 0.1;
   p.color.r = 167.0 / 255.0;
@@ -739,11 +801,14 @@ void nbvInspection::RrtTree::publishNode(Node<StateVec> * node)
     for (int i = 0; i < node->state_.size(); i++) {
       fileTree_ << node->state_[i] << ",";
     }
-    fileTree_ << node->gain_ << ",";
+    fileTree_ << gain << ",";
     for (int i = 0; i < node->parent_->state_.size(); i++) {
       fileTree_ << node->parent_->state_[i] << ",";
     }
-    fileTree_ << node->parent_->gain_ << "\n";
+    double parent_gain = predictedOctomapManager_
+                    ? node->parent_->predictive_gain_
+                    : node->parent_->original_gain_;
+    fileTree_ << parent_gain << "\n";
   }
 }
 

@@ -46,26 +46,38 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void setPeerStateFromPoseMsg(const geometry_msgs::PoseWithCovarianceStamped& pose, int n_peer);
   virtual void initialize();
   virtual void iterate(int iterations);
-  virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame);
+  virtual std::vector<geometry_msgs::Pose> getBestEdge(
+      std::string targetFrame,
+      const nbvInspection::Node<StateVec> * const bestNode,
+      float * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gainNodes=nullptr);
   virtual void clear();
-  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame);
+  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(
+      std::string targetFrame,
+      float * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gain_nodes=nullptr);
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
+
   /**
    * @param[in]  state state where the info gain is computed
+   * @param[out] default_gain_nodes nodes that contributed to the
+   *                default gain (optional)
    * @param[out] original_gain_ptr original gain (optional)
    * @param[out] original_gain_nodes nodes that contributed to the
    *                original gain (optional)
    * @param[out] predictive_gain_nodes nodes that contributed to the gain
    *                from predicted map (optional)
    * @param[out] predictive_gain_ptr gain from the predicted map (optional)
+   * @todo TODO: make a different class to handle predictive gain rather than
+   *              this monstrosity
    */
-  double gain(
-      StateVec state,
-      double *original_gain_ptr=nullptr,
-      std::vector<Eigen::Vector3d> *original_gain_nodes=nullptr,
-      double *predictive_gain_ptr=nullptr,
-      std::vector<Eigen::Vector3d> *predictive_gain_nodes=nullptr) const;
+  void gain(
+      StateVec _state,
+      double &_original_gain,
+      std::vector<Eigen::Vector3d> &_original_gain_nodes,
+      double &_predictive_gain,
+      std::vector<Eigen::Vector3d>  &_predictive_gain_nodes) const;
 
   std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
                                               std::string targetFrame);

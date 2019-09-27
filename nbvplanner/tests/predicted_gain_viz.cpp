@@ -248,7 +248,7 @@ void PredictedGainViz::vizInfoGain()
       return;
     }
     tree->gain(
-        random_state, &gain, &gain_nodes,
+        random_state, nullptr, &gain, &gain_nodes,
         &predicted_gain, &predicted_gain_nodes
     );
   } while (gain == 0.0 && ros::ok());

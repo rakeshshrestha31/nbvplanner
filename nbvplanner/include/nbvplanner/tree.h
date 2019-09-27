@@ -76,12 +76,18 @@ template<typename stateVec>
 class Node
 {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Node();
   ~Node();
   stateVec state_;
   Node * parent_;
   std::vector<Node*> children_;
-  double gain_;
+
+  double original_gain_;
+  double predictive_gain_;
+  std::vector<Eigen::Vector3d> original_gain_nodes_;
+  std::vector<Eigen::Vector3d> predictive_gain_nodes_;
+
   double distance_;
 };
 
@@ -91,8 +97,11 @@ class TreeBase
  protected:
   Params params_;
   int counter_;
-  double bestGain_;
-  Node<stateVec> * bestNode_;
+  double bestOriginalGain_;
+  double bestPredictiveGain_;
+
+  Node<stateVec> * bestOriginalNode_;
+  Node<stateVec> * bestPredictiveNode_;
   Node<stateVec> * rootNode_;
   mesh::StlMesh * mesh_;
   volumetric_mapping::OctomapManager * manager_;
@@ -104,6 +113,7 @@ class TreeBase
   std::shared_ptr<volumetric_mapping::OctomapManager>
       predictedOctomapManager_;
 
+  void updateBestNode(Node<stateVec> * newNode);
  public:
   TreeBase();
   TreeBase(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);

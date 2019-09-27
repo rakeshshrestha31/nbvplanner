@@ -172,7 +172,7 @@ void OriginalGainViz::vizInfoGain()
     {
       return;
     }
-    gain = tree->gain(random_state, nullptr, &gain_nodes);
+    gain = tree->gain(random_state, &gain_nodes);
   } while (gain == 0.0 && ros::ok());
 
   ROS_INFO_STREAM("random state: " << random_state.transpose());

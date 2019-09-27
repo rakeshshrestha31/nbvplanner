@@ -125,33 +125,19 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
 template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::initializeTrees()
 {
-  TreeBase<stateVec> * default_tree;
-
   // Initialize the tree instance(s).
-  if (use_predictive_ig_) {
-    predictive_tree_ = std::make_shared<RrtTree>(mesh_, manager_);
-    predictive_tree_->setParams(params_);
-    default_tree = predictive_tree_.get();
-
-    if (compute_both_ig_trajectories_) {
-      original_tree_ = std::make_shared<RrtTree>(mesh_, manager_);
-      original_tree_->setParams(params_);
-    }
-  } else {
-    original_tree_ = std::make_shared<RrtTree>(mesh_, manager_);
-    original_tree_->setParams(params_);
-    default_tree = original_tree_.get();
-  }
+  rrt_tree_ = std::make_shared<RrtTree>(mesh_, manager_);
+  rrt_tree_->setParams(params_);
 
   peerPosClient1_ = nh_.subscribe("peer_pose_1", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg1, default_tree);
+                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg1, rrt_tree_.get());
   peerPosClient2_ = nh_.subscribe("peer_pose_2", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg2, default_tree);
+                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg2, rrt_tree_.get());
   peerPosClient3_ = nh_.subscribe("peer_pose_3", 10,
-                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg3, default_tree);
+                                  &nbvInspection::RrtTree::setPeerStateFromPoseMsg3, rrt_tree_.get());
   // Subscribe to topic used for the collaborative collision avoidance (don't hit your peer).
   evadeClient_ = nh_.subscribe("/evasionSegment", 10, &nbvInspection::TreeBase<stateVec>::evade,
-                               default_tree);
+                               rrt_tree_.get());
 }
 
 template<typename stateVec>
@@ -169,12 +155,7 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::posCallback(
     const geometry_msgs::PoseWithCovarianceStamped& pose)
 {
-  if (original_tree_) {
-    original_tree_->setStateFromPoseMsg(pose);
-  }
-  if (predictive_tree_) {
-    predictive_tree_->setStateFromPoseMsg(pose);
-  }
+  rrt_tree_->setStateFromPoseMsg(pose);
   // Planner is now ready to plan.
   ready_ = true;
 }
@@ -183,12 +164,7 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::odomCallback(
     const nav_msgs::Odometry& pose)
 {
-  if (original_tree_) {
-    original_tree_->setStateFromOdometryMsg(pose);
-  }
-  if (predictive_tree_) {
-    predictive_tree_->setStateFromOdometryMsg(pose);
-  }
+  rrt_tree_->setStateFromOdometryMsg(pose);
   // Planner is now ready to plan.
   ready_ = true;
 }
@@ -217,37 +193,39 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     return true;
   }
 
-  if (use_predictive_ig_ && predictive_tree_) {
+  float original_gain = 0;
+  std::vector<Eigen::Vector3d> * original_gain_nodes;
+  float predictive_gain = 0;
+  std::vector<Eigen::Vector3d> * predictive_gain_nodes;
+
+  if (use_predictive_ig_) {
     std::shared_ptr<volumetric_mapping::OctomapManager>
         predicted_map_manager(nullptr);
     getCompletedOcTreeManager(predicted_map_manager);
-    predictive_tree_->setPredictedOctomapManager(predicted_map_manager);
+    rrt_tree_->setPredictedOctomapManager(predicted_map_manager);
 
-    auto path_state = getBestPath(
-        predictive_tree_, req.header.frame_id, res.predictive_path);
+    auto path_state = getBestPredictivePath(
+        rrt_tree_, req.header.frame_id, res.predictive_path,
+        &predictive_gain, &predictive_gain_nodes);
+
     res.predictive_path_success = (path_state != BestPathState::NOT_FOUND);
     if (path_state != BestPathState::OKAY) {
       return true;
     }
   }
 
-  if (!use_predictive_ig_ || !predictive_tree_ || compute_both_ig_trajectories_) {
-    if (original_tree_) {
-      scene_completion_interface_->updateInputOcTree(manager_->getOctree());
-      auto path_state = getBestPath(
-          original_tree_, req.header.frame_id, res.original_path);
-      res.original_path_success = (path_state != BestPathState::NOT_FOUND);
-      if (path_state != BestPathState::OKAY) {
+  if (!use_predictive_ig_ || compute_both_ig_trajectories_) {
+    scene_completion_interface_->updateInputOcTree(manager_->getOctree());
+    // TODO: get original best path
+    auto path_state = getBestPath(
+        rrt_tree_, req.header.frame_id, res.original_path,
+        &original_gain, &original_gain_nodes);
+    res.original_path_success = (path_state != BestPathState::NOT_FOUND);
+
+    if (path_state != BestPathState::OKAY) {
+      if (!use_predictive_ig_) {
         return true;
       }
-
-      if (use_predictive_ig_ && predictive_tree_) {
-        // set best from from predictive tree
-        // so that the next sampling will be initialized properly
-        original_tree_->setBestBranch(predictive_tree_->getBestBranch());
-      }
-    } else {
-      ROS_ERROR("original_tree_ null, shouldn't happen here");
     }
   }
 
@@ -272,7 +250,9 @@ nbvInspection::BestPathState
 nbvInspection::nbvPlanner<stateVec>::getBestPath(
     const std::shared_ptr< TreeBase<stateVec> > &tree,
     const std::string &frame_id,
-    std::vector<geometry_msgs::Pose> &path)
+    std::vector<geometry_msgs::Pose> &path,
+    float * const gain=/*nullptr*/,
+    std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
 {
   path.clear();
 
@@ -290,14 +270,14 @@ nbvInspection::nbvPlanner<stateVec>::getBestPath(
     }
     if (loopCount > 1000 * (tree->getCounter() + 1)) {
       ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
-      path = tree->getPathBackToPrevious(frame_id);
+      path = tree->getPathBackToPrevious(frame_id, gain, gain_nodes);
       return BestPathState::ALMOST_OKAY;
     }
     tree->iterate(1);
     loopCount++;
   }
   // Extract the best edge.
-  path = tree->getBestEdge(frame_id);
+  path = tree->getBestEdge(frame_id, gain, gain_nodes);
 
   tree->memorizeBestBranch();
   return BestPathState::OKAY;
@@ -536,12 +516,7 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTf(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    if (original_tree_) {
-      original_tree_->insertPointcloudWithTf(pointcloud);
-    }
-    if (predictive_tree_) {
-      predictive_tree_->insertPointcloudWithTf(pointcloud);
-    }
+    rrt_tree_->insertPointcloudWithTf(pointcloud);
     last += params_.pcl_throttle_;
   }
 }
@@ -552,12 +527,7 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamUp(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    if (original_tree_) {
-      original_tree_->insertPointcloudWithTf(pointcloud);
-    }
-    if (predictive_tree_) {
-      predictive_tree_->insertPointcloudWithTf(pointcloud);
-    }
+    rrt_tree_->insertPointcloudWithTf(pointcloud);
     last += params_.pcl_throttle_;
   }
 }
@@ -568,12 +538,7 @@ void nbvInspection::nbvPlanner<stateVec>::insertPointcloudWithTfCamDown(
 {
   static double last = ros::Time::now().toSec();
   if (last + params_.pcl_throttle_ < ros::Time::now().toSec()) {
-    if (original_tree_) {
-      original_tree_->insertPointcloudWithTf(pointcloud);
-    }
-    if (predictive_tree_) {
-      predictive_tree_->insertPointcloudWithTf(pointcloud);
-    }
+    rrt_tree_->insertPointcloudWithTf(pointcloud);
     last += params_.pcl_throttle_;
   }
 }
@@ -582,12 +547,7 @@ template<typename stateVec>
 void nbvInspection::nbvPlanner<stateVec>::evasionCallback(
     const multiagent_collision_check::Segment& segmentMsg)
 {
-  if (original_tree_) {
-    original_tree_->evade(segmentMsg);
-  }
-  if (predictive_tree_) {
-    predictive_tree_->evade(segmentMsg);
-  }
+  rrt_tree_->evade(segmentMsg);
 }
 
 template<typename stateVec>

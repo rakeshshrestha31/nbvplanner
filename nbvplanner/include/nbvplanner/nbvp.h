@@ -82,10 +82,8 @@ class nbvPlanner
  public:
   typedef std::vector<stateVec> vector_t;
 
-  /** (RRT) Tree using original information gain */
-  std::shared_ptr< TreeBase<stateVec> > original_tree_;
-  /** (RRT) Tree using predictive information gain */
-  std::shared_ptr< TreeBase<stateVec> > predictive_tree_;
+  /** (RRT) Tree using predictive/original/both information gain */
+  std::shared_ptr< TreeBase<stateVec> > rrt_tree_;
 
   nbvPlanner(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
   ~nbvPlanner();
@@ -103,12 +101,15 @@ class nbvPlanner
 
   /**
    * Get best path from a given tree
+   * Optionally return immediate gain and gain_nodes (voxels)
    * @return state of the query
    */
   BestPathState getBestPath(
       const std::shared_ptr< TreeBase<stateVec> > &tree,
       const std::string &frame_id,
-      std::vector<geometry_msgs::Pose> &path);
+      std::vector<geometry_msgs::Pose> &path,
+      float * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gain_nodes=nullptr);
 
   /** Get complete scene from the map created thus far */
   bool getCompletedOcTree(
