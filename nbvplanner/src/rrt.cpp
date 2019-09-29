@@ -352,15 +352,21 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
 
+    // TODO: remove the logging
+    ROS_INFO_STREAM("sampling state: " << newState.transpose());
+
     double original_gain;
     double predictive_gain;
     gain(newNode->state_,
          original_gain, newNode->original_gain_nodes_,
          predictive_gain, newNode->predictive_gain_nodes_);
-    newNode->original_gain_ += original_gain
-        * exp(-params_.degressiveCoeff_ * newNode->distance_);
-    newNode->predictive_gain_ += predictive_gain
-        * exp(-params_.degressiveCoeff_ * newNode->distance_);
+
+    newNode->original_gain_ =
+        newNode->parent_->original_gain_
+        + original_gain * exp(-params_.degressiveCoeff_ * newNode->distance_);
+    newNode->predictive_gain_ =
+        newNode->parent_->predictive_gain_
+        + predictive_gain * exp(-params_.degressiveCoeff_ * newNode->distance_);
 
     kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -380,6 +386,8 @@ void nbvInspection::RrtTree::updateBestNode(Node<StateVec> * newNode)
     if (newNode->original_gain_ > bestOriginalGain_) {
       bestOriginalGain_ = newNode->original_gain_;
       bestOriginalNode_ = newNode;
+      // TODO: change INFO to DEBUG
+      ROS_INFO("best original gain so far: %f", bestOriginalGain_);
     }
     if (newNode->predictive_gain_ > bestPredictiveGain_) {
       bestPredictiveGain_ = newNode->predictive_gain_;
@@ -430,6 +438,9 @@ void nbvInspection::RrtTree::initialize()
   kd_insert3(kdTree_, rootNode_->state_.x(), rootNode_->state_.y(), rootNode_->state_.z(),
              rootNode_);
   iterationCount_++;
+
+  // TODO: remove the print
+  ROS_INFO_STREAM("RootNode: " << rootNode_->state_.transpose());
 
 // Insert all nodes of the remainder of the previous best branch, checking for collisions and
 // recomputing the gain.
@@ -491,6 +502,9 @@ void nbvInspection::RrtTree::initialize()
       updateBestNode(newNode);
 
       counter_++;
+    } else {
+      // TODO: remove the print
+      ROS_INFO_STREAM("Unable to re-init prev state: " << newState.transpose());
     }
   }
 
@@ -525,7 +539,7 @@ void nbvInspection::RrtTree::initialize()
 }
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
-    InfoGainType gainType,
+    const InfoGainType gainType,
     std::string targetFrame,
     double * const gain/*=nullptr*/,
     std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
@@ -534,12 +548,21 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
   const auto * const bestNode = (gainType == InfoGainType::ORIGINAL)
                                   ? bestOriginalNode_ : bestPredictiveNode_;
 
+  if (!bestNode) {
+    ROS_WARN("Best node NULL");
+  }
   std::vector<geometry_msgs::Pose> ret;
   auto current = bestNode;
-  if (current->parent_ != NULL) {
+  if (current != NULL && current->parent_ != NULL) {
     while (current->parent_ != rootNode_ && current->parent_ != NULL) {
       current = current->parent_;
     }
+
+    // TODO remove the print
+    ROS_INFO_STREAM(
+        "Best Edge: " << current->parent_->state_.transpose() << " "
+                      << current->state_.transpose());
+
     ret = samplePath(current->parent_->state_, current->state_, targetFrame);
     history_.push(current->parent_->state_);
     exact_root_ = current->state_;

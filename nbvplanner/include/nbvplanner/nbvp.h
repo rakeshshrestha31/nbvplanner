@@ -40,7 +40,7 @@ namespace nbvInspection {
 
 enum BestPathState
 {
-  NOT_FOUND=0, OKAY, ALMOST_OKAY, LEN
+  NOT_FOUND=0, OKAY, ALMOST_OKAY, BEST_PATH_STATE_LEN
 };
 
 template<typename stateVec>
@@ -97,7 +97,14 @@ class nbvPlanner
   void evasionCallback(const multiagent_collision_check::Segment& segmentMsg);
 
   /** Initialize the (RRT) tree(s) */
-  void initializeTrees();
+  void initializeTree();
+
+  /**
+   * update RRT tree by random sampling
+   * @param gain_type Information Gain type to check for termination.
+   *    Note: both original and predictive gains are computed
+   */
+  BestPathState updateTree(const InfoGainType gain_type);
 
   /**
    * Get best path from a given tree
@@ -143,6 +150,9 @@ class nbvPlanner
   volumetric_mapping::OctomapManager * getOctomapManager() const {
     return manager_;
   }
+
+protected:
+  double max_planner_wait_time_; ///< Max wait time for planner
 };
 }
 

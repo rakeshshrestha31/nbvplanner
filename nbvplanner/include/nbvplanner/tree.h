@@ -130,7 +130,7 @@ class TreeBase
   virtual void iterate(int iterations) = 0;
   virtual void initialize() = 0;
   virtual std::vector<geometry_msgs::Pose> getBestEdge(
-      InfoGainType gainType,
+      const InfoGainType gainType,
       std::string targetFrame,
       double * const gain=nullptr,
       std::vector<Eigen::Vector3d> * const gainNodes=nullptr) = 0;
