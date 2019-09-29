@@ -37,7 +37,6 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
 {
  public:
   typedef Eigen::Vector4d StateVec;
-
   RrtTree();
   RrtTree(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);
   ~RrtTree();
@@ -47,14 +46,15 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void initialize();
   virtual void iterate(int iterations);
   virtual std::vector<geometry_msgs::Pose> getBestEdge(
+      InfoGainType gainType,
       std::string targetFrame,
-      const nbvInspection::Node<StateVec> * const bestNode,
-      float * const gain=nullptr,
+      double * const gain=nullptr,
       std::vector<Eigen::Vector3d> * const gainNodes=nullptr);
+
   virtual void clear();
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(
       std::string targetFrame,
-      float * const gain=nullptr,
+      double * const gain=nullptr,
       std::vector<Eigen::Vector3d> * const gain_nodes=nullptr);
   virtual void memorizeBestBranch();
   void publishNode(Node<StateVec> * node);
@@ -87,6 +87,8 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   void setBestBranch(const std::vector<StateVec> &bestBranch) {
     bestBranchMemory_ = bestBranch;
   }
+ protected:
+  void updateBestNode(Node<StateVec> * newNode);
 
  protected:
   kdtree * kdTree_;

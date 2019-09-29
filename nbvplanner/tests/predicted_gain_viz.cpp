@@ -214,7 +214,7 @@ void PredictedGainViz::publishIgPredictedNodes(
 std::shared_ptr<nbvInspection::RrtTree> PredictedGainViz::getRrtTree()
 {
   auto tree = std::static_pointer_cast<nbvInspection::RrtTree>(
-      nbv_planner_->original_tree_
+      nbv_planner_->rrt_tree_
   );
   if (!tree)
   {
@@ -248,8 +248,8 @@ void PredictedGainViz::vizInfoGain()
       return;
     }
     tree->gain(
-        random_state, nullptr, &gain, &gain_nodes,
-        &predicted_gain, &predicted_gain_nodes
+        random_state, gain, gain_nodes,
+        predicted_gain, predicted_gain_nodes
     );
   } while (gain == 0.0 && ros::ok());
 

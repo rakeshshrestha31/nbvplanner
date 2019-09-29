@@ -154,7 +154,7 @@ void OriginalGainViz::publishIgNodes(
 void OriginalGainViz::vizInfoGain()
 {
   auto tree = std::static_pointer_cast<nbvInspection::RrtTree>(
-      nbv_planner_->original_tree_
+      nbv_planner_->rrt_tree_
   );
   if (!tree)
   {
@@ -162,8 +162,10 @@ void OriginalGainViz::vizInfoGain()
     return;
   }
 
-  double gain = 0.0;
-  std::vector<Eigen::Vector3d> gain_nodes;
+  double original_gain = 0.0;
+  double predictive_gain = 0.0;
+  std::vector<Eigen::Vector3d> original_gain_nodes;
+  std::vector<Eigen::Vector3d> predictive_gain_nodes;
   StateVecT random_state;
   // get a state with non-zero gain
   do
@@ -172,14 +174,16 @@ void OriginalGainViz::vizInfoGain()
     {
       return;
     }
-    gain = tree->gain(random_state, &gain_nodes);
-  } while (gain == 0.0 && ros::ok());
+    tree->gain(random_state, original_gain, original_gain_nodes,
+               predictive_gain, predictive_gain_nodes);
+  } while (original_gain == 0.0 && ros::ok());
 
   ROS_INFO_STREAM("random state: " << random_state.transpose());
-  ROS_INFO("Gain: %f, Gain nodes: %lu", gain, gain_nodes.size());
+  ROS_INFO(
+      "Gain: %f, Gain nodes: %lu", original_gain, original_gain_nodes.size()
+  );
   publishIgState(random_state);
-  publishIgNodes(gain_nodes);
-
+  publishIgNodes(original_gain_nodes);
 }
 
 int main(int argc, char **argv)

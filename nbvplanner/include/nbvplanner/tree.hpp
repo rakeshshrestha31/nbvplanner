@@ -24,7 +24,8 @@ nbvInspection::Node<stateVec>::Node()
 {
   parent_ = NULL;
   distance_ = DBL_MAX;
-  gain_ = 0.0;
+  original_gain_ = 0.0;
+  predictive_gain_ = 0.0;
 }
 
 template<typename stateVec>
@@ -41,8 +42,10 @@ template<typename stateVec>
 nbvInspection::TreeBase<stateVec>::TreeBase()
   : predictedOctomapManager_(nullptr)
 {
-  bestGain_ = params_.zero_gain_;
-  bestNode_ = NULL;
+  bestOriginalGain_ = params_.zero_gain_;
+  bestPredictiveGain_ = params_.zero_gain_;
+  bestOriginalNode_ = NULL;
+  bestPredictiveNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
 }
@@ -53,8 +56,10 @@ nbvInspection::TreeBase<stateVec>::TreeBase(mesh::StlMesh * mesh,
 {
   mesh_ = mesh;
   manager_ = manager;
-  bestGain_ = params_.zero_gain_;
-  bestNode_ = NULL;
+  bestOriginalGain_ = params_.zero_gain_;
+  bestPredictiveGain_ = params_.zero_gain_;
+  bestOriginalNode_ = NULL;
+  bestPredictiveNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
 }
@@ -98,9 +103,15 @@ int nbvInspection::TreeBase<stateVec>::getCounter()
 }
 
 template<typename stateVec>
-bool nbvInspection::TreeBase<stateVec>::gainFound()
+bool nbvInspection::TreeBase<stateVec>::originalGainFound()
 {
-  return bestGain_ > params_.zero_gain_;
+  return bestOriginalGain_ > params_.zero_gain_;
+}
+
+template<typename stateVec>
+bool nbvInspection::TreeBase<stateVec>::predictiveGainFound()
+{
+  return bestPredictiveGain_ > params_.zero_gain_;
 }
 
 template<typename stateVec>

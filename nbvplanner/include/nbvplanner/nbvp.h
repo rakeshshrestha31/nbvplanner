@@ -105,10 +105,10 @@ class nbvPlanner
    * @return state of the query
    */
   BestPathState getBestPath(
-      const std::shared_ptr< TreeBase<stateVec> > &tree,
+      InfoGainType gain_type,
       const std::string &frame_id,
       std::vector<geometry_msgs::Pose> &path,
-      float * const gain=nullptr,
+      double * const gain=nullptr,
       std::vector<Eigen::Vector3d> * const gain_nodes=nullptr);
 
   /** Get complete scene from the map created thus far */

@@ -193,10 +193,10 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     return true;
   }
 
-  float original_gain = 0;
-  std::vector<Eigen::Vector3d> * original_gain_nodes;
-  float predictive_gain = 0;
-  std::vector<Eigen::Vector3d> * predictive_gain_nodes;
+  double original_gain = 0;
+  std::vector<Eigen::Vector3d> original_gain_nodes;
+  double predictive_gain = 0;
+  std::vector<Eigen::Vector3d> predictive_gain_nodes;
 
   if (use_predictive_ig_) {
     std::shared_ptr<volumetric_mapping::OctomapManager>
@@ -204,8 +204,8 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     getCompletedOcTreeManager(predicted_map_manager);
     rrt_tree_->setPredictedOctomapManager(predicted_map_manager);
 
-    auto path_state = getBestPredictivePath(
-        rrt_tree_, req.header.frame_id, res.predictive_path,
+    auto path_state = getBestPath(
+        InfoGainType::PREDICTIVE, req.header.frame_id, res.predictive_path,
         &predictive_gain, &predictive_gain_nodes);
 
     res.predictive_path_success = (path_state != BestPathState::NOT_FOUND);
@@ -216,9 +216,9 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
 
   if (!use_predictive_ig_ || compute_both_ig_trajectories_) {
     scene_completion_interface_->updateInputOcTree(manager_->getOctree());
-    // TODO: get original best path
+
     auto path_state = getBestPath(
-        rrt_tree_, req.header.frame_id, res.original_path,
+        InfoGainType::ORIGINAL, req.header.frame_id, res.original_path,
         &original_gain, &original_gain_nodes);
     res.original_path_success = (path_state != BestPathState::NOT_FOUND);
 
@@ -248,38 +248,44 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
 template<typename stateVec>
 nbvInspection::BestPathState
 nbvInspection::nbvPlanner<stateVec>::getBestPath(
-    const std::shared_ptr< TreeBase<stateVec> > &tree,
+    InfoGainType gain_type,
     const std::string &frame_id,
     std::vector<geometry_msgs::Pose> &path,
-    float * const gain=/*nullptr*/,
+    double * const gain/*=nullptr*/,
     std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
 {
+  const std::function<bool(void)> gainFound =
+    (gain_type == InfoGainType::ORIGINAL)
+      ? std::bind(&RrtTree::originalGainFound, rrt_tree_.get())
+      : std::bind(&RrtTree::predictiveGainFound, rrt_tree_.get());
+
   path.clear();
 
   // Clear old tree and reinitialize.
-  tree->clear();
-  tree->initialize();
+  rrt_tree_->clear();
+  rrt_tree_->initialize();
 
   // Iterate the tree construction method.
   int loopCount = 0;
-  while ((!tree->gainFound() || tree->getCounter() < params_.initIterations_) && ros::ok()) {
-    if (tree->getCounter() > params_.cuttoffIterations_) {
+  while ((!gainFound() || rrt_tree_->getCounter() < params_.initIterations_)
+         && ros::ok()) {
+    if (rrt_tree_->getCounter() > params_.cuttoffIterations_) {
       ROS_INFO("No gain found, requesting shutdown");
       // ros::shutdown();
       return BestPathState::NOT_FOUND;
     }
-    if (loopCount > 1000 * (tree->getCounter() + 1)) {
+    if (loopCount > 1000 * (rrt_tree_->getCounter() + 1)) {
       ROS_INFO_THROTTLE(1, "Exceeding maximum failed iterations, return to previous point!");
-      path = tree->getPathBackToPrevious(frame_id, gain, gain_nodes);
+      path = rrt_tree_->getPathBackToPrevious(frame_id, gain, gain_nodes);
       return BestPathState::ALMOST_OKAY;
     }
-    tree->iterate(1);
+    rrt_tree_->iterate(1);
     loopCount++;
   }
   // Extract the best edge.
-  path = tree->getBestEdge(frame_id, gain, gain_nodes);
+  path = rrt_tree_->getBestEdge(gain_type, frame_id, gain, gain_nodes);
 
-  tree->memorizeBestBranch();
+  rrt_tree_->memorizeBestBranch();
   return BestPathState::OKAY;
 }
 

@@ -374,7 +374,7 @@ void nbvInspection::RrtTree::iterate(int iterations)
   }
 }
 
-void nbvInspection::updateBestNode(Node<stateVec> * newNode)
+void nbvInspection::RrtTree::updateBestNode(Node<StateVec> * newNode)
 {
   if (newNode) {
     if (newNode->original_gain_ > bestOriginalGain_) {
@@ -524,31 +524,18 @@ void nbvInspection::RrtTree::initialize()
   params_.inspectionPath_.publish(p);
 }
 
-std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestOriginalEdge(
-    std::string targetFrame,
-    double * const gain/*=nullptr*/,
-    std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
-{
-  return getBestEdge(targetFrame, bestOriginalNode_, gain, gainNodes);
-}
-
-std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestPredictiveEdge(
-    std::string targetFrame,
-    double * const gain/*=nullptr*/,
-    std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
-{
-  return getBestEdge(targetFrame, bestPredictiveNode_, gain, gainNodes);
-}
-
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
+    InfoGainType gainType,
     std::string targetFrame,
-    const nbvInspection::Node<StateVec> * const bestNode,
     double * const gain/*=nullptr*/,
     std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
 {
-// This function returns the first edge of the best branch
+  // This function returns the first edge of the best branch
+  const auto * const bestNode = (gainType == InfoGainType::ORIGINAL)
+                                  ? bestOriginalNode_ : bestPredictiveNode_;
+
   std::vector<geometry_msgs::Pose> ret;
-  nbvInspection::Node<StateVec> * current = bestNode;
+  auto current = bestNode;
   if (current->parent_ != NULL) {
     while (current->parent_ != rootNode_ && current->parent_ != NULL) {
       current = current->parent_;
@@ -558,10 +545,13 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
     exact_root_ = current->state_;
 
     if (gain) {
-      *gain = exact_root_.gain;
+      *gain = (gainType == InfoGainType::ORIGINAL)
+                ? current->original_gain_ : current->predictive_gain_;
     }
     if (gainNodes) {
-      *gainNodes = exact_root_.gain_nodes;
+      *gainNodes = (gainType == InfoGainType::ORIGINAL)
+                    ? current->original_gain_nodes_
+                    : current->predictive_gain_nodes_;
     }
   }
   return ret;
@@ -686,7 +676,7 @@ void nbvInspection::RrtTree::gain(
 
 std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
     std::string targetFrame,
-    float * const gain/*=nullptr*/,
+    double * const gain/*=nullptr*/,
     std::vector<Eigen::Vector3d> * const gain_nodes/*=nullptr*/)
 {
   std::vector<geometry_msgs::Pose> ret;
@@ -697,10 +687,12 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getPathBackToPrevious(
   const auto history_top = history_.top();
   ret = samplePath(root_, history_top, targetFrame);
   if (gain) {
-    *gain = history_top.gain;
+    // the previous node has already been mapped, no gain
+    *gain = 0;
   }
   if (gain_nodes) {
-    *gain_nodes = history_top.gain_nodes;
+    // the previous node has already been mapped, no gain
+    (*gain_nodes).clear();
   }
   history_.pop();
   return ret;

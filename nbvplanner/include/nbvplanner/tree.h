@@ -72,6 +72,10 @@ struct Params
   double inspection_throttle_;
 };
 
+enum InfoGainType {
+  ORIGINAL = 0, PREDICTIVE, IG_TYPE_LEN
+};
+
 template<typename stateVec>
 class Node
 {
@@ -112,8 +116,6 @@ class TreeBase
 
   std::shared_ptr<volumetric_mapping::OctomapManager>
       predictedOctomapManager_;
-
-  void updateBestNode(Node<stateVec> * newNode);
  public:
   TreeBase();
   TreeBase(mesh::StlMesh * mesh, volumetric_mapping::OctomapManager * manager);
@@ -127,9 +129,16 @@ class TreeBase
   void evade(const multiagent_collision_check::Segment& segmentMsg);
   virtual void iterate(int iterations) = 0;
   virtual void initialize() = 0;
-  virtual std::vector<geometry_msgs::Pose> getBestEdge(std::string targetFrame) = 0;
+  virtual std::vector<geometry_msgs::Pose> getBestEdge(
+      InfoGainType gainType,
+      std::string targetFrame,
+      double * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gainNodes=nullptr) = 0;
   virtual void clear() = 0;
-  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(std::string targetFrame) = 0;
+  virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(
+      std::string targetFrame,
+      double * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gain_nodes=nullptr) = 0;
 
   virtual void memorizeBestBranch() = 0;
   virtual std::vector<stateVec> getBestBranch() = 0;
@@ -137,7 +146,8 @@ class TreeBase
 
   void setParams(Params params);
   int getCounter();
-  bool gainFound();
+  bool originalGainFound();
+  bool predictiveGainFound();
   void insertPointcloudWithTf(const sensor_msgs::PointCloud2::ConstPtr& pointcloud);
 
   void setPredictedOctomapManager(
