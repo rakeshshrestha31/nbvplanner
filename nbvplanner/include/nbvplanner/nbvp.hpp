@@ -281,8 +281,8 @@ nbvInspection::nbvPlanner<stateVec>::updateTree(const InfoGainType gain_type)
     rrt_tree_->memorizeBestBranch();
     return BestPathState::OKAY;
   } else {
-    ROS_ERROR("No gain found until timeout, return to previous point!");
-    return BestPathState::ALMOST_OKAY;
+    ROS_ERROR("No gain found until timeout, request shutdown!");
+    return BestPathState::NOT_FOUND;
   }
 }
 
@@ -306,15 +306,10 @@ nbvInspection::nbvPlanner<stateVec>::getBestPath(
     // Extract the best edge.
     path = rrt_tree_->getBestEdge(gain_type, frame_id, gain, gain_nodes);
     return BestPathState::OKAY;
-  } else if (rrt_tree_->getCounter() > params_.cuttoffIterations_) {
+  } else {
     ROS_ERROR("No gain found, requesting shutdown");
     // ros::shutdown();
     return BestPathState::NOT_FOUND;
-  } else {
-    // ROS_WARNING_THROTTLE(
-    //     1, "Exceeding maximum failed iterations, return to previous point!");
-    path = rrt_tree_->getPathBackToPrevious(frame_id, gain, gain_nodes);
-    return BestPathState::ALMOST_OKAY;
   }
 }
 
