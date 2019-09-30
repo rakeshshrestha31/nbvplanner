@@ -218,9 +218,10 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
   }
 
   if (!use_predictive_ig_ || compute_both_ig_trajectories_) {
-    res.original_path_success = getBestPath(
+    const auto local_path_state = getBestPath(
         InfoGainType::ORIGINAL, req.header.frame_id, res.original_path,
         &original_gain, &original_gain_nodes);
+    res.original_path_success = (local_path_state != BestPathState::NOT_FOUND);
   }
 
   if (path_state == BestPathState::OKAY) {
@@ -263,7 +264,7 @@ nbvInspection::nbvPlanner<stateVec>::updateTree(const InfoGainType gain_type)
          && ros::Time::now().toSec() - startTime < max_planner_wait_time_
          && ros::ok()) {
     if (rrt_tree_->getCounter() > params_.cuttoffIterations_) {
-      ROS_ERROR("No gain found, requesting shutdown");
+      ROS_ERROR("No gain found until cutoff iterations, requesting shutdown");
       // ros::shutdown();
       return BestPathState::NOT_FOUND;
     }
@@ -275,8 +276,14 @@ nbvInspection::nbvPlanner<stateVec>::updateTree(const InfoGainType gain_type)
     rrt_tree_->iterate(1);
     loopCount++;
   }
-  rrt_tree_->memorizeBestBranch();
-  return BestPathState::OKAY;
+
+  if (gainFound()) {
+    rrt_tree_->memorizeBestBranch();
+    return BestPathState::OKAY;
+  } else {
+    ROS_ERROR("No gain found until timeout, return to previous point!");
+    return BestPathState::ALMOST_OKAY;
+  }
 }
 
 template<typename stateVec>
@@ -290,7 +297,12 @@ nbvInspection::nbvPlanner<stateVec>::getBestPath(
 {
   path.clear();
 
-  if (rrt_tree_->getCounter() <= params_.initIterations_) {
+  const auto gainFound =
+    (gain_type == InfoGainType::ORIGINAL)
+      ? std::bind(&RrtTree::originalGainFound, rrt_tree_.get())
+      : std::bind(&RrtTree::predictiveGainFound, rrt_tree_.get());
+
+  if (gainFound()) {
     // Extract the best edge.
     path = rrt_tree_->getBestEdge(gain_type, frame_id, gain, gain_nodes);
     return BestPathState::OKAY;
