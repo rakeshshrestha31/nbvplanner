@@ -218,7 +218,7 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
   }
 
   if (!use_predictive_ig_ || compute_both_ig_trajectories_) {
-    getBestPath(
+    res.original_path_success = getBestPath(
         InfoGainType::ORIGINAL, req.header.frame_id, res.original_path,
         &original_gain, &original_gain_nodes);
   }
@@ -267,11 +267,11 @@ nbvInspection::nbvPlanner<stateVec>::updateTree(const InfoGainType gain_type)
       // ros::shutdown();
       return BestPathState::NOT_FOUND;
     }
-    if (loopCount > 1000 * (rrt_tree_->getCounter() + 1)) {
-      ROS_ERROR_THROTTLE(
-          1, "Exceeding maximum failed iterations, return to previous point!");
-      return BestPathState::ALMOST_OKAY;
-    }
+    // if (loopCount > (unsigned long)100000 * (rrt_tree_->getCounter() + 1)) {
+    //   ROS_ERROR_THROTTLE(
+    //       1, "Exceeding maximum failed iterations, return to previous point!");
+    //   return BestPathState::ALMOST_OKAY;
+    // }
     rrt_tree_->iterate(1);
     loopCount++;
   }

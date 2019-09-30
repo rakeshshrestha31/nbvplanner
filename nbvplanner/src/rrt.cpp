@@ -549,35 +549,37 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
                                   ? bestOriginalNode_ : bestPredictiveNode_;
 
   if (!bestNode) {
-    ROS_WARN("Best node NULL");
+    ROS_WARN("Best node NULL. Getting path to previous node");
+    return getPathBackToPrevious(targetFrame, gain, gainNodes);
+  } else {
+    std::vector<geometry_msgs::Pose> ret;
+    auto current = bestNode;
+    if (current != NULL && current->parent_ != NULL) {
+      while (current->parent_ != rootNode_ && current->parent_ != NULL) {
+        current = current->parent_;
+      }
+
+      // TODO remove the print
+      ROS_INFO_STREAM(
+          "Best Edge: " << current->parent_->state_.transpose() << " "
+                        << current->state_.transpose());
+
+      ret = samplePath(current->parent_->state_, current->state_, targetFrame);
+      history_.push(current->parent_->state_);
+      exact_root_ = current->state_;
+
+      if (gain) {
+        *gain = (gainType == InfoGainType::ORIGINAL)
+                  ? current->original_gain_ : current->predictive_gain_;
+      }
+      if (gainNodes) {
+        *gainNodes = (gainType == InfoGainType::ORIGINAL)
+                      ? current->original_gain_nodes_
+                      : current->predictive_gain_nodes_;
+      }
+    }
+    return ret;
   }
-  std::vector<geometry_msgs::Pose> ret;
-  auto current = bestNode;
-  if (current != NULL && current->parent_ != NULL) {
-    while (current->parent_ != rootNode_ && current->parent_ != NULL) {
-      current = current->parent_;
-    }
-
-    // TODO remove the print
-    ROS_INFO_STREAM(
-        "Best Edge: " << current->parent_->state_.transpose() << " "
-                      << current->state_.transpose());
-
-    ret = samplePath(current->parent_->state_, current->state_, targetFrame);
-    history_.push(current->parent_->state_);
-    exact_root_ = current->state_;
-
-    if (gain) {
-      *gain = (gainType == InfoGainType::ORIGINAL)
-                ? current->original_gain_ : current->predictive_gain_;
-    }
-    if (gainNodes) {
-      *gainNodes = (gainType == InfoGainType::ORIGINAL)
-                    ? current->original_gain_nodes_
-                    : current->predictive_gain_nodes_;
-    }
-  }
-  return ret;
 }
 
 void nbvInspection::RrtTree::gain(
@@ -726,9 +728,13 @@ void nbvInspection::RrtTree::memorizeBestBranch()
   bestBranchMemory_.clear();
   Node<StateVec> * current = predictedOctomapManager_
                            ? bestPredictiveNode_ : bestOriginalNode_;
-  while (current->parent_ && current->parent_->parent_) {
-    bestBranchMemory_.push_back(current->state_);
-    current = current->parent_;
+  if (current) {
+    while (current->parent_ && current->parent_->parent_) {
+      bestBranchMemory_.push_back(current->state_);
+      current = current->parent_;
+    }
+  } else {
+    ROS_WARN("memorizeBestBranch: best node NULL");
   }
 }
 
