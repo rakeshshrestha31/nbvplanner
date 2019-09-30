@@ -352,9 +352,6 @@ void nbvInspection::RrtTree::iterate(int iterations)
     newNode->distance_ = newParent->distance_ + direction.norm();
     newParent->children_.push_back(newNode);
 
-    // TODO: remove the logging
-    ROS_INFO_STREAM("sampling state: " << newState.transpose());
-
     double original_gain;
     double predictive_gain;
     gain(newNode->state_,
@@ -386,8 +383,7 @@ void nbvInspection::RrtTree::updateBestNode(Node<StateVec> * newNode)
     if (newNode->original_gain_ > bestOriginalGain_) {
       bestOriginalGain_ = newNode->original_gain_;
       bestOriginalNode_ = newNode;
-      // TODO: change INFO to DEBUG
-      ROS_INFO("best original gain so far: %f", bestOriginalGain_);
+      ROS_DEBUG("best original gain so far: %f", bestOriginalGain_);
     }
     if (newNode->predictive_gain_ > bestPredictiveGain_) {
       bestPredictiveGain_ = newNode->predictive_gain_;
@@ -439,8 +435,7 @@ void nbvInspection::RrtTree::initialize()
              rootNode_);
   iterationCount_++;
 
-  // TODO: remove the print
-  ROS_INFO_STREAM("RootNode: " << rootNode_->state_.transpose());
+  ROS_DEBUG_STREAM("RootNode: " << rootNode_->state_.transpose());
 
 // Insert all nodes of the remainder of the previous best branch, checking for collisions and
 // recomputing the gain.
@@ -559,24 +554,41 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
         current = current->parent_;
       }
 
-      // TODO remove the print
-      ROS_INFO_STREAM(
-          "Best Edge: " << current->parent_->state_.transpose() << " "
-                        << current->state_.transpose());
-
       ret = samplePath(current->parent_->state_, current->state_, targetFrame);
       history_.push(current->parent_->state_);
       exact_root_ = current->state_;
 
+      double immediate_gain;
+      double final_gain;
+      const std::vector<Eigen::Vector3d> * immediate_gain_nodes;
+      std::string gain_name;
+      if (gainType == InfoGainType::ORIGINAL) {
+        immediate_gain        = current->original_gain_;
+        final_gain            = bestNode->original_gain_;
+        immediate_gain_nodes  = &(current->original_gain_nodes_);
+        gain_name             = "ORIGINAL";
+      } else {
+        immediate_gain         = current->predictive_gain_;
+        final_gain             = bestNode->predictive_gain_;
+        immediate_gain_nodes   = &(current->predictive_gain_nodes_);
+        gain_name              = "PREDICTIVE";
+      }
+
       if (gain) {
-        *gain = (gainType == InfoGainType::ORIGINAL)
-                  ? current->original_gain_ : current->predictive_gain_;
+        *gain = immediate_gain;
       }
       if (gainNodes) {
-        *gainNodes = (gainType == InfoGainType::ORIGINAL)
-                      ? current->original_gain_nodes_
-                      : current->predictive_gain_nodes_;
+        *gainNodes = *immediate_gain_nodes;
       }
+
+      // TODO remove the print
+      ROS_INFO("Gain type: %s, immediate gain: %f, final gain: %f",
+               gain_name.c_str(), immediate_gain, final_gain);
+      ROS_INFO_STREAM(
+          "Gain type: " << gain_name
+          << " immediate next: " << current->state_.transpose()
+          << " final next: " << bestNode->state_.transpose()
+      );
     }
     return ret;
   }
