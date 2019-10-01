@@ -348,7 +348,9 @@ bool nbvInspection::nbvPlanner<stateVec>::getCompletedOcTreeManager(
         std::make_shared<volumetric_mapping::OctomapManager>(
             nh_, nh_private_, completed_octree,
             /*subscribe_topics=*/false);
-    completed_octree_manger->setUnmappableKeys(manager_->getUnmappableKeys());
+    std::vector<octomap::point3d> unmappable_points;
+    manager_->getUnmappableCoords(unmappable_points);
+    completed_octree_manger->setUnmappableCoords(unmappable_points);
     return true;
   } else {
     return false;
