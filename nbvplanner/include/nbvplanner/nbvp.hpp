@@ -20,12 +20,50 @@
 #include <fstream>
 #include <eigen3/Eigen/Dense>
 
+#include <pcl/point_types.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
+
 #include <visualization_msgs/Marker.h>
 
 #include <nbvplanner/nbvp.h>
 
 // Convenience macro to get the absolute yaw difference
 #define ANGABS(x) (fmod(fabs(x),2.0*M_PI)<M_PI?fmod(fabs(x),2.0*M_PI):2.0*M_PI-fmod(fabs(x),2.0*M_PI))
+
+namespace nbvInspection {
+// Convenience function to convert vector of eigen vectors to pcl point cloud
+void vectorsToCloud(const std::vector<Eigen::Vector3d>& vectors,
+                    pcl::PointCloud<pcl::PointXYZ>& pcl_cloud,
+                    const std::string &frame_id, const ros::Time &stamp)
+{
+  pcl_cloud.header.frame_id = frame_id;
+  pcl_conversions::toPCL(stamp, pcl_cloud.header.stamp);
+
+  pcl_cloud.clear();
+  for (const auto &vector: vectors) {
+    pcl_cloud.push_back(pcl::PointXYZ(vector(0), vector(1), vector(2)));
+  }
+}
+
+// Convenience function to convert vector of poses to a path
+void poseVectorToPath(const std::vector<geometry_msgs::Pose> & pose_vector,
+                      nav_msgs::Path & path,
+                      const std::string & frame_id, const ros::Time stamp)
+{
+  path.header.stamp = stamp;
+  path.header.frame_id = frame_id;
+  path.poses.clear();
+
+  for (const auto &pose: pose_vector) {
+    geometry_msgs::PoseStamped pose_stamped;
+    pose_stamped.pose = pose;
+    pose_stamped.header = path.header;
+    path.poses.push_back(pose_stamped);
+  }
+}
+
+} // endnamespace nbvInspection
 
 using namespace Eigen;
 
@@ -44,6 +82,23 @@ nbvInspection::nbvPlanner<stateVec>::nbvPlanner(const ros::NodeHandle& nh,
   plannerService_ = nh_.advertiseService("nbvplanner",
                                          &nbvInspection::nbvPlanner<stateVec>::plannerCallback,
                                          this);
+
+  predictive_gain_pcl_pub_ =
+    nh_private_.advertise< pcl::PointCloud<pcl::PointXYZ> >(
+      "predictive_gain_pcl", 5, true
+    );
+  original_gain_pcl_pub_ =
+    nh_private_.advertise< pcl::PointCloud<pcl::PointXYZ> >(
+      "original_gain_pcl", 5, true
+    );
+
+  predictive_full_trajectory_pub_ = nh_private_.advertise<nav_msgs::Path>(
+      "predictive_full_trajectory", 5, true
+  );
+  original_full_trajectory_pub_ = nh_private_.advertise<nav_msgs::Path>(
+      "original_full_trajectory", 5, true
+  );
+
   posClient_ = nh_.subscribe("pose", 10, &nbvInspection::nbvPlanner<stateVec>::posCallback, this);
   odomClient_ = nh_.subscribe("odometry", 10, &nbvInspection::nbvPlanner<stateVec>::odomCallback, this);
 
@@ -194,13 +249,16 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     return true;
   }
 
-  double original_gain = 0;
-  std::vector<Eigen::Vector3d> original_gain_nodes;
-  double predictive_gain = 0;
-  std::vector<Eigen::Vector3d> predictive_gain_nodes;
+  // expand octree to avoid unnecessary unknown voxels
+  manager_->expandOcTree();
 
   BestPathState path_state;
   if (use_predictive_ig_) {
+    double immediate_gain = 0;
+    double final_gain = 0;
+    std::vector<Eigen::Vector3d> immediate_gain_nodes;
+    std::vector<Eigen::Vector3d> final_gain_nodes;
+
     std::shared_ptr<volumetric_mapping::OctomapManager>
         predicted_map_manager(nullptr);
     getCompletedOcTreeManager(predicted_map_manager);
@@ -210,7 +268,26 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
     res.predictive_path_success = (path_state != BestPathState::NOT_FOUND);
     getBestPath(
         InfoGainType::PREDICTIVE, req.header.frame_id, res.predictive_path,
-        &predictive_gain, &predictive_gain_nodes);
+        &immediate_gain, &immediate_gain_nodes);
+
+    const auto full_trajectory = rrt_tree_->getBestFullTrajectory(
+        InfoGainType::PREDICTIVE, req.header.frame_id,
+        &final_gain, &final_gain_nodes
+    );
+
+    // publish the full trajectory
+    nav_msgs::Path path;
+    poseVectorToPath(
+        full_trajectory, path, req.header.frame_id, req.header.stamp
+    );
+    predictive_full_trajectory_pub_.publish(path);
+
+    // publish the gain nodes
+    pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
+    vectorsToCloud(
+        final_gain_nodes, pcl_cloud, req.header.frame_id, req.header.stamp
+    );
+    predictive_gain_pcl_pub_.publish(pcl_cloud);
   } else {
     scene_completion_interface_->updateInputOcTree(manager_->getOctree());
     path_state = updateTree(InfoGainType::ORIGINAL);
@@ -218,10 +295,34 @@ bool nbvInspection::nbvPlanner<stateVec>::plannerCallback(nbvplanner::nbvp_srv::
   }
 
   if (!use_predictive_ig_ || compute_both_ig_trajectories_) {
+    double immediate_gain = 0;
+    double final_gain = 0;
+    std::vector<Eigen::Vector3d> immediate_gain_nodes;
+    std::vector<Eigen::Vector3d> final_gain_nodes;
+
     const auto local_path_state = getBestPath(
         InfoGainType::ORIGINAL, req.header.frame_id, res.original_path,
-        &original_gain, &original_gain_nodes);
+        &immediate_gain, &immediate_gain_nodes);
     res.original_path_success = (local_path_state != BestPathState::NOT_FOUND);
+
+    const auto full_trajectory = rrt_tree_->getBestFullTrajectory(
+        InfoGainType::ORIGINAL, req.header.frame_id,
+        &final_gain, &final_gain_nodes
+    );
+
+    // publish the full trajectory
+    nav_msgs::Path path;
+    poseVectorToPath(
+        full_trajectory, path, req.header.frame_id, req.header.stamp
+    );
+    original_full_trajectory_pub_.publish(path);
+
+    // publish the gain nodes
+    pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
+    vectorsToCloud(
+        final_gain_nodes, pcl_cloud, req.header.frame_id, req.header.stamp
+    );
+    original_gain_pcl_pub_.publish(pcl_cloud);
   }
 
   if (path_state == BestPathState::OKAY) {

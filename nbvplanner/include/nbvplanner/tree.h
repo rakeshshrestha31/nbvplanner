@@ -134,6 +134,11 @@ class TreeBase
       std::string targetFrame,
       double * const gain=nullptr,
       std::vector<Eigen::Vector3d> * const gainNodes=nullptr) = 0;
+  virtual std::vector<geometry_msgs::Pose> getBestFullTrajectory(
+      const InfoGainType gainType,
+      std::string targetFrame,
+      double * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gainNodes=nullptr) = 0;
   virtual void clear() = 0;
   virtual std::vector<geometry_msgs::Pose> getPathBackToPrevious(
       std::string targetFrame,

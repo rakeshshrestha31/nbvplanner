@@ -22,6 +22,24 @@
 #include <nbvplanner/rrt.h>
 #include <nbvplanner/tree.hpp>
 
+template <class StateVec>
+geometry_msgs::Pose stateToPose(const StateVec & state)
+{
+  geometry_msgs::Pose pose;
+  pose.position.x = state(0);
+  pose.position.y = state(1);
+  pose.position.z = state(2);
+
+  tf2::Quaternion quat;
+  quat.setRPY(0.0, 0.0, state(3));
+  pose.orientation.x = quat.getX();
+  pose.orientation.y = quat.getY();
+  pose.orientation.z = quat.getZ();
+  pose.orientation.w = quat.getW();
+
+  return pose;
+}
+
 nbvInspection::RrtTree::RrtTree()
     : nbvInspection::TreeBase<StateVec>::TreeBase()
 {
@@ -592,6 +610,45 @@ std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestEdge(
     }
     return ret;
   }
+}
+
+std::vector<geometry_msgs::Pose> nbvInspection::RrtTree::getBestFullTrajectory(
+    const InfoGainType gainType,
+    std::string targetFrame,
+    double * const gain/*=nullptr*/,
+    std::vector<Eigen::Vector3d> * const gainNodes/*=nullptr*/)
+{
+  // This function returns the first edge of the best branch
+  const auto * const bestNode = (gainType == InfoGainType::ORIGINAL)
+                                  ? bestOriginalNode_ : bestPredictiveNode_;
+
+  std::vector<geometry_msgs::Pose> ret;
+  if (!bestNode) {
+    return ret;
+  }
+  if (gain) {
+    *gain = (gainType == InfoGainType::ORIGINAL)
+              ? bestNode->original_gain_ : bestNode->predictive_gain_;
+  }
+  if (gainNodes) {
+    gainNodes->clear();
+  }
+
+  for (auto current = bestNode; current; current = current->parent_) {
+    ret.push_back(stateToPose(current->state_));
+
+    const std::vector<Eigen::Vector3d> * const immediate_gain_nodes =
+      (gainType == InfoGainType::ORIGINAL)
+        ? &(current->original_gain_nodes_) : &(current->predictive_gain_nodes_);
+
+    if (gainNodes) {
+      gainNodes->insert(
+          gainNodes->end(),
+          immediate_gain_nodes->begin(), immediate_gain_nodes->end());
+    }
+  }
+  std::reverse(ret.begin(), ret.end());
+  return ret;
 }
 
 void nbvInspection::RrtTree::gain(

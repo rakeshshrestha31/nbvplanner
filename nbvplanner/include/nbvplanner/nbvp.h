@@ -24,6 +24,7 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <octomap_world/octomap_manager.h>
 #include <multiagent_collision_check/Segment.h>
 #include <nbvplanner/nbvp_srv.h>
@@ -153,6 +154,11 @@ class nbvPlanner
 
 protected:
   double max_planner_wait_time_; ///< Max wait time for planner
+  ros::Publisher predictive_gain_pcl_pub_;
+  ros::Publisher original_gain_pcl_pub_;
+
+  ros::Publisher predictive_full_trajectory_pub_;
+  ros::Publisher original_full_trajectory_pub_;
 };
 }
 

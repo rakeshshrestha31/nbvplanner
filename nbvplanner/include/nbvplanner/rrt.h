@@ -24,6 +24,8 @@
 #include <eigen3/Eigen/Dense>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
+#include <tf2/LinearMath/Quaternion.h>
+
 #include <kdtree/kdtree.h>
 #include <nbvplanner/tree.h>
 #include <nbvplanner/mesh_structure.h>
@@ -46,6 +48,11 @@ class RrtTree : public TreeBase<Eigen::Vector4d>
   virtual void initialize();
   virtual void iterate(int iterations);
   virtual std::vector<geometry_msgs::Pose> getBestEdge(
+      const InfoGainType gainType,
+      std::string targetFrame,
+      double * const gain=nullptr,
+      std::vector<Eigen::Vector3d> * const gainNodes=nullptr);
+  virtual std::vector<geometry_msgs::Pose> getBestFullTrajectory(
       const InfoGainType gainType,
       std::string targetFrame,
       double * const gain=nullptr,
