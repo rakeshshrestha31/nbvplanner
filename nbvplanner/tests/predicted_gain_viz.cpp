@@ -241,6 +241,9 @@ void PredictedGainViz::vizInfoGain()
   std::vector<Eigen::Vector3d> predicted_gain_nodes;
   StateVecT random_state;
   // get a state with non-zero gain
+
+  auto *octomap_manager = nbv_planner_->getOctomapManager();
+  octomap_manager->expandOcTree();
   do
   {
     if (!getRandomState(random_state))
