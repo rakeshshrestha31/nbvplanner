@@ -714,9 +714,14 @@ void nbvInspection::RrtTree::gain(
         };
 
         if (cell_gains.at(node) > 1e-6) {
+          // is a cell is a frontier (i.e. doesn't go through other unknowns),
+          // should still count towards info gain
+          bool is_cell_frontier = false;
+
           // Rayshooting to evaluate inspectability of cell
           const auto original_visibility =
-              this->manager_->getVisibility(origin, vec, false);
+              this->manager_->getVisibility(
+                  origin, vec, false, &is_cell_frontier);
 
           if (original_visibility != CellStatus::kUnmappable
               && original_visibility != CellStatus::kOccupied) {
@@ -729,11 +734,22 @@ void nbvInspection::RrtTree::gain(
           }
 
           if (predictedOctomapManager_) {
-            const auto predicted_visibility =
-                predictedOctomapManager_->getVisibility(origin, vec, false);
+            bool is_gain_cell = false;
+            if (original_visibility != CellStatus::kUnmappable
+                && original_visibility == CellStatus::kFree
+                && is_cell_frontier) {
+              // frontier cells qualify by default
+              is_gain_cell = true;
+            } else {
+              const auto predicted_visibility =
+                  predictedOctomapManager_->getVisibility(origin, vec, false);
+              if (predicted_visibility != CellStatus::kUnmappable
+                  && predicted_visibility != CellStatus::kOccupied) {
+                is_gain_cell = true;
+              }
+            }
 
-            if (predicted_visibility != CellStatus::kUnmappable
-                && predicted_visibility != CellStatus::kOccupied) {
+            if (is_gain_cell) {
               _predictive_gain += cell_gains[node];
               _predictive_gain_nodes.push_back(vec);
             }
@@ -744,9 +760,9 @@ void nbvInspection::RrtTree::gain(
   } //endfor(vec[0])
 
   if (predictedOctomapManager_
-      && _predictive_gain == 0.0
-      && _original_gain > 0.0) {
-    _predictive_gain = _original_gain * 0.25;
+      && _predictive_gain < 1e-3
+      && _original_gain > 1e-3) {
+    // _predictive_gain = _original_gain * 0.1;
     ROS_WARN_STREAM("Predictive gain 0 for state " << _state.transpose());
   }
 
